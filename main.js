@@ -691,9 +691,13 @@ const updateCameraPosition = () => {
     // Update camera rotation based on mouse movement and look joystick
     if (isMobile && touchControls.lookJoystick.active) {
         // Use look joystick for camera rotation on mobile
-        const lookSensitivity = 0.01;
-        yaw -= touchControls.lookJoystick.x * lookSensitivity;
-        pitch -= touchControls.lookJoystick.y * lookSensitivity;
+        // Much lower sensitivity for smoother control - normalize joystick input
+        const lookSensitivity = 0.005;
+        const normalizedX = touchControls.lookJoystick.x / 40; // Normalize to -1 to 1
+        const normalizedY = touchControls.lookJoystick.y / 40; // Normalize to -1 to 1
+        
+        yaw -= normalizedX * lookSensitivity;
+        pitch -= normalizedY * lookSensitivity;
         
         // Limit vertical look
         const maxPitch = Math.PI / 3;
