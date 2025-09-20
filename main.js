@@ -185,6 +185,10 @@ let touchControls = {
     sprint: false
 };
 
+// Mobile action button state
+let mobileActionButton = null;
+let currentAction = null; // 'talk', 'travel', or null
+
 // Camera movement function updated for first-person controls
 
 document.addEventListener('keydown', (event) => {
@@ -277,9 +281,9 @@ if (isMobile) {
     joystick.appendChild(joystickKnob);
     mobileUI.appendChild(joystick);
 
-    // Sprint button
-    const sprintButton = document.createElement('div');
-    sprintButton.style.cssText = `
+    // Dynamic action button (Talk/Travel)
+    mobileActionButton = document.createElement('div');
+    mobileActionButton.style.cssText = `
         position: absolute;
         bottom: 80px;
         right: 80px;
@@ -293,12 +297,13 @@ if (isMobile) {
         align-items: center;
         justify-content: center;
         color: white;
-        font-size: 12px;
+        font-size: 11px;
         text-align: center;
         line-height: 1.2;
+        font-weight: bold;
     `;
-    sprintButton.innerHTML = 'RUN';
-    mobileUI.appendChild(sprintButton);
+    mobileActionButton.innerHTML = 'RUN';
+    mobileUI.appendChild(mobileActionButton);
 
     // Touch event handlers for joystick
     const handleJoystickStart = (e) => {
@@ -349,9 +354,9 @@ if (isMobile) {
 
     // Touch event handlers for camera look
     const handleLookStart = (e) => {
-        // Only handle look if not touching joystick or sprint button
+        // Only handle look if not touching joystick or action button
         const rect = joystick.getBoundingClientRect();
-        const sprintRect = sprintButton.getBoundingClientRect();
+        const actionRect = mobileActionButton.getBoundingClientRect();
         const touch = e.touches ? e.touches[0] : e;
         
         if (touch.clientX >= rect.left && touch.clientX <= rect.right && 
@@ -359,9 +364,9 @@ if (isMobile) {
             return; // Touching joystick
         }
         
-        if (touch.clientX >= sprintRect.left && touch.clientX <= sprintRect.right && 
-            touch.clientY >= sprintRect.top && touch.clientY <= sprintRect.bottom) {
-            return; // Touching sprint button
+        if (touch.clientX >= actionRect.left && touch.clientX <= actionRect.right && 
+            touch.clientY >= actionRect.top && touch.clientY <= actionRect.bottom) {
+            return; // Touching action button
         }
         
         e.preventDefault();
@@ -395,17 +400,38 @@ if (isMobile) {
         touchControls.look.active = false;
     };
 
-    // Sprint button handlers
-    const handleSprintStart = (e) => {
+    // Action button handlers
+    const handleActionStart = (e) => {
         e.preventDefault();
-        touchControls.sprint = true;
-        sprintButton.style.background = 'rgba(255, 255, 255, 0.3)';
+        
+        if (currentAction === 'talk') {
+            // Handle NPC conversation
+            handleConversationInteraction();
+        } else if (currentAction === 'travel') {
+            // Handle scene switching
+            const busStopPosition = new THREE.Vector3(-15, 0, PLAZA_CONFIG.NEAR_SIDEWALK_Z);
+            const playerPosition = camera.position;
+            const distanceToBusStop = playerPosition.distanceTo(busStopPosition);
+            
+            if (distanceToBusStop < 5) { // Within 5 units of bus stop
+                if (CURRENT_SCENE === 'PLAZA') {
+                    switchScene('FOREST_SUBURBAN');
+                } else {
+                    switchScene('PLAZA');
+                }
+            }
+        } else {
+            // Default to sprint
+            touchControls.sprint = true;
+        }
+        
+        mobileActionButton.style.background = 'rgba(255, 255, 255, 0.3)';
     };
 
-    const handleSprintEnd = (e) => {
+    const handleActionEnd = (e) => {
         e.preventDefault();
         touchControls.sprint = false;
-        sprintButton.style.background = 'rgba(0, 0, 0, 0.3)';
+        mobileActionButton.style.background = 'rgba(0, 0, 0, 0.3)';
     };
 
     // Add event listeners
@@ -413,13 +439,55 @@ if (isMobile) {
     joystick.addEventListener('touchmove', handleJoystickMove, { passive: false });
     joystick.addEventListener('touchend', handleJoystickEnd, { passive: false });
     
-    sprintButton.addEventListener('touchstart', handleSprintStart, { passive: false });
-    sprintButton.addEventListener('touchend', handleSprintEnd, { passive: false });
+    mobileActionButton.addEventListener('touchstart', handleActionStart, { passive: false });
+    mobileActionButton.addEventListener('touchend', handleActionEnd, { passive: false });
     
     document.addEventListener('touchstart', handleLookStart, { passive: false });
     document.addEventListener('touchmove', handleLookMove, { passive: false });
     document.addEventListener('touchend', handleLookEnd, { passive: false });
 }
+
+// Function to update mobile action button based on proximity
+const updateMobileActionButton = () => {
+    if (!isMobile || !mobileActionButton) return;
+    
+    const cameraPosition = camera.position;
+    let newAction = null;
+    let buttonText = 'RUN';
+    let buttonColor = 'rgba(0, 0, 0, 0.3)';
+    
+    // Check for nearby NPCs
+    if (streetElements.npcs) {
+        for (let npc of streetElements.npcs) {
+            const distance = cameraPosition.distanceTo(npc.position);
+            if (distance < 3) {
+                newAction = 'talk';
+                buttonText = 'TALK';
+                buttonColor = 'rgba(255, 100, 100, 0.3)';
+                break;
+            }
+        }
+    }
+    
+    // Check for bus stop proximity
+    if (newAction === null) {
+        const busStopPosition = new THREE.Vector3(-15, 0, PLAZA_CONFIG.NEAR_SIDEWALK_Z);
+        const distanceToBusStop = cameraPosition.distanceTo(busStopPosition);
+        
+        if (distanceToBusStop < 5) {
+            newAction = 'travel';
+            buttonText = 'TRAVEL';
+            buttonColor = 'rgba(100, 255, 100, 0.3)';
+        }
+    }
+    
+    // Update button if action changed
+    if (newAction !== currentAction) {
+        currentAction = newAction;
+        mobileActionButton.innerHTML = buttonText;
+        mobileActionButton.style.background = buttonColor;
+    }
+};
 
 // Function to update camera position based on WASD input
 const updateCameraPosition = () => {
@@ -4319,6 +4387,9 @@ const animate = (currentTime) => {
     
     // Check for bus stop proximity for scene switching
     checkBusStopProximity();
+    
+    // Update mobile action button
+    updateMobileActionButton();
     
     // Update all animations
     animateNeonSigns();

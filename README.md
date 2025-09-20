@@ -62,7 +62,7 @@ python3 -m http.server 8080
 ## Controls
 
 - **WASD Keys or Arrow Keys** - Move around the plaza (hold Shift to sprint)
-- **Mobile Touch Controls** - Virtual joystick for movement, touch and drag for camera rotation, RUN button for sprinting
+- **Mobile Touch Controls** - Virtual joystick for movement, touch and drag for camera rotation, dynamic action button (Talk/Travel/Run)
 - **Mouse** - Click and drag to rotate the camera view
 - **Mouse Wheel** - Scroll to zoom in and out
 - **E Key** - Talk to NPCs when nearby (unlocks songs and stories)
@@ -75,7 +75,10 @@ The game automatically detects mobile devices and provides touch controls:
 
 - **Virtual Joystick** (bottom left) - Drag to move in any direction
 - **Touch & Drag** (anywhere else) - Look around and rotate the camera
-- **RUN Button** (bottom right) - Hold to sprint (same as Shift on desktop)
+- **Dynamic Action Button** (bottom right) - Changes based on what you're near:
+  - **TALK** (red) - When near an NPC, press to start a conversation
+  - **TRAVEL** (green) - When near the bus stop, press to switch scenes
+  - **RUN** (gray) - Default state, hold to sprint
 
 The mobile controls are designed to be intuitive and responsive, allowing for smooth movement and camera control on touch devices.
 
