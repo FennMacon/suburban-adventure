@@ -407,18 +407,75 @@ if (isMobile) {
         if (currentAction === 'talk') {
             // Handle NPC conversation
             if (hasActiveConversation()) {
-                // Continue ongoing conversation
-                const stillActive = advanceConversation();
-                if (stillActive) {
-                    const dialogue = getCurrentDialogue();
-                    interactionUI.style.display = 'block';
-                    showDialogueStep(dialogue);
+                // Check if conversation is at the end waiting for final press
+                if (conversationAtEnd) {
+                    // Final press - unlock song and end conversation
+                    console.log('Final mobile press - ending conversation...');
+                    const unlockedSong = unlockCurrentSong();
+                    if (unlockedSong) {
+                        interactionUI.innerHTML = `
+                            <div style="font-size: 14px; color: #88FF88; margin-bottom: 10px;">
+                                🎵 Unlocked: ${unlockedSong.replace(/_/g, ' ')}
+                            </div>
+                            <div style="font-size: 12px; color: #CCCCCC;">
+                                Press any key to continue...
+                            </div>
+                        `;
+                        
+                        setTimeout(() => {
+                            const endConversationHandler = () => {
+                                endConversation();
+                                // Force update nearby NPC detection
+                                checkNearbyNPCs();
+                                if (nearbyNPC) {
+                                    const npcName = nearbyNPC.userData.name;
+                                    interactionUI.innerHTML = `
+                                        <div>Near ${npcName}</div>
+                                        <div style="font-size: 14px; margin-top: 5px;">Press 'E' to talk</div>
+                                    `;
+                                } else {
+                                    interactionUI.style.display = 'none';
+                                }
+                                document.removeEventListener('keydown', endConversationHandler);
+                            };
+                            document.addEventListener('keydown', endConversationHandler);
+                        }, 100);
+                    } else {
+                        // No unlock, just end the conversation immediately
+                        endConversation();
+                        // Force update nearby NPC detection
+                        checkNearbyNPCs();
+                        if (nearbyNPC) {
+                            const npcName = nearbyNPC.userData.name;
+                            interactionUI.innerHTML = `
+                                <div>Near ${npcName}</div>
+                                <div style="font-size: 14px; margin-top: 5px;">Press 'E' to talk</div>
+                            `;
+                        } else {
+                            interactionUI.style.display = 'none';
+                        }
+                    }
                 } else {
-                    // Conversation ended
-                    interactionUI.style.display = 'none';
-                    setTimeout(() => {
-                        // Allow new interactions after a brief delay
-                    }, 1000);
+                    // Continue ongoing conversation
+                    const dialogue = getCurrentDialogue();
+                    if (dialogue) {
+                        console.log('Showing dialogue:', dialogue.text);
+                        // Show current dialogue
+                        interactionUI.style.display = 'block';
+                        showDialogueStep(dialogue);
+                        
+                        // Advance to next line
+                        advanceConversation();
+                        
+                        // Check if there are more lines
+                        const nextDialogue = getCurrentDialogue();
+                        console.log('After advance, nextDialogue:', nextDialogue);
+                        if (!nextDialogue) {
+                            // No more lines, set flag to wait for final press
+                            console.log('Last line shown, waiting for final press...');
+                            setConversationAtEnd(true);
+                        }
+                    }
                 }
             } else if (nearbyNPC) {
                 // Start new conversation
