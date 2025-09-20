@@ -177,6 +177,14 @@ const keyboard = { w: false, a: false, s: false, d: false, shift: false, up: fal
 const moveSpeed = 0.2; // Speed of movement
 const sprintMultiplier = 2.0; // Speed multiplier when shift is pressed
 
+// Mobile touch controls
+let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+let touchControls = {
+    joystick: { active: false, x: 0, y: 0, centerX: 0, centerY: 0 },
+    look: { active: false, startX: 0, startY: 0, lastX: 0, lastY: 0 },
+    sprint: false
+};
+
 // Camera movement function updated for first-person controls
 
 document.addEventListener('keydown', (event) => {
@@ -225,6 +233,194 @@ document.addEventListener('keyup', (event) => {
     }
 });
 
+// Mobile touch controls
+if (isMobile) {
+    // Create mobile UI elements
+    const mobileUI = document.createElement('div');
+    mobileUI.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        pointer-events: none;
+        z-index: 1000;
+        user-select: none;
+    `;
+    document.body.appendChild(mobileUI);
+
+    // Virtual joystick for movement
+    const joystick = document.createElement('div');
+    joystick.style.cssText = `
+        position: absolute;
+        bottom: 80px;
+        left: 80px;
+        width: 120px;
+        height: 120px;
+        border: 3px solid rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.3);
+        pointer-events: auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    `;
+    
+    const joystickKnob = document.createElement('div');
+    joystickKnob.style.cssText = `
+        width: 40px;
+        height: 40px;
+        background: rgba(255, 255, 255, 0.8);
+        border-radius: 50%;
+        transition: transform 0.1s ease;
+    `;
+    joystick.appendChild(joystickKnob);
+    mobileUI.appendChild(joystick);
+
+    // Sprint button
+    const sprintButton = document.createElement('div');
+    sprintButton.style.cssText = `
+        position: absolute;
+        bottom: 80px;
+        right: 80px;
+        width: 80px;
+        height: 80px;
+        border: 3px solid rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.3);
+        pointer-events: auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 12px;
+        text-align: center;
+        line-height: 1.2;
+    `;
+    sprintButton.innerHTML = 'RUN';
+    mobileUI.appendChild(sprintButton);
+
+    // Touch event handlers for joystick
+    const handleJoystickStart = (e) => {
+        e.preventDefault();
+        const rect = joystick.getBoundingClientRect();
+        touchControls.joystick.centerX = rect.left + rect.width / 2;
+        touchControls.joystick.centerY = rect.top + rect.height / 2;
+        touchControls.joystick.active = true;
+        
+        const touch = e.touches ? e.touches[0] : e;
+        touchControls.joystick.x = touch.clientX - touchControls.joystick.centerX;
+        touchControls.joystick.y = touch.clientY - touchControls.joystick.centerY;
+        
+        updateJoystickPosition();
+    };
+
+    const handleJoystickMove = (e) => {
+        if (!touchControls.joystick.active) return;
+        e.preventDefault();
+        
+        const touch = e.touches ? e.touches[0] : e;
+        touchControls.joystick.x = touch.clientX - touchControls.joystick.centerX;
+        touchControls.joystick.y = touch.clientY - touchControls.joystick.centerY;
+        
+        updateJoystickPosition();
+    };
+
+    const handleJoystickEnd = (e) => {
+        e.preventDefault();
+        touchControls.joystick.active = false;
+        touchControls.joystick.x = 0;
+        touchControls.joystick.y = 0;
+        joystickKnob.style.transform = 'translate(0, 0)';
+    };
+
+    const updateJoystickPosition = () => {
+        const maxDistance = 40; // Half of joystick radius
+        const distance = Math.sqrt(touchControls.joystick.x * touchControls.joystick.x + touchControls.joystick.y * touchControls.joystick.y);
+        
+        if (distance > maxDistance) {
+            const angle = Math.atan2(touchControls.joystick.y, touchControls.joystick.x);
+            touchControls.joystick.x = Math.cos(angle) * maxDistance;
+            touchControls.joystick.y = Math.sin(angle) * maxDistance;
+        }
+        
+        joystickKnob.style.transform = `translate(${touchControls.joystick.x}px, ${touchControls.joystick.y}px)`;
+    };
+
+    // Touch event handlers for camera look
+    const handleLookStart = (e) => {
+        // Only handle look if not touching joystick or sprint button
+        const rect = joystick.getBoundingClientRect();
+        const sprintRect = sprintButton.getBoundingClientRect();
+        const touch = e.touches ? e.touches[0] : e;
+        
+        if (touch.clientX >= rect.left && touch.clientX <= rect.right && 
+            touch.clientY >= rect.top && touch.clientY <= rect.bottom) {
+            return; // Touching joystick
+        }
+        
+        if (touch.clientX >= sprintRect.left && touch.clientX <= sprintRect.right && 
+            touch.clientY >= sprintRect.top && touch.clientY <= sprintRect.bottom) {
+            return; // Touching sprint button
+        }
+        
+        e.preventDefault();
+        touchControls.look.active = true;
+        touchControls.look.startX = touch.clientX;
+        touchControls.look.startY = touch.clientY;
+        touchControls.look.lastX = touch.clientX;
+        touchControls.look.lastY = touch.clientY;
+    };
+
+    const handleLookMove = (e) => {
+        if (!touchControls.look.active) return;
+        e.preventDefault();
+        
+        const touch = e.touches ? e.touches[0] : e;
+        const deltaX = touch.clientX - touchControls.look.lastX;
+        const deltaY = touch.clientY - touchControls.look.lastY;
+        
+        yaw -= deltaX * mouseSensitivity * 2; // Slightly more sensitive for touch
+        pitch -= deltaY * mouseSensitivity * 2;
+        
+        // Limit vertical look
+        pitch = Math.max(-maxPitch, Math.min(maxPitch, pitch));
+        
+        touchControls.look.lastX = touch.clientX;
+        touchControls.look.lastY = touch.clientY;
+    };
+
+    const handleLookEnd = (e) => {
+        e.preventDefault();
+        touchControls.look.active = false;
+    };
+
+    // Sprint button handlers
+    const handleSprintStart = (e) => {
+        e.preventDefault();
+        touchControls.sprint = true;
+        sprintButton.style.background = 'rgba(255, 255, 255, 0.3)';
+    };
+
+    const handleSprintEnd = (e) => {
+        e.preventDefault();
+        touchControls.sprint = false;
+        sprintButton.style.background = 'rgba(0, 0, 0, 0.3)';
+    };
+
+    // Add event listeners
+    joystick.addEventListener('touchstart', handleJoystickStart, { passive: false });
+    joystick.addEventListener('touchmove', handleJoystickMove, { passive: false });
+    joystick.addEventListener('touchend', handleJoystickEnd, { passive: false });
+    
+    sprintButton.addEventListener('touchstart', handleSprintStart, { passive: false });
+    sprintButton.addEventListener('touchend', handleSprintEnd, { passive: false });
+    
+    document.addEventListener('touchstart', handleLookStart, { passive: false });
+    document.addEventListener('touchmove', handleLookMove, { passive: false });
+    document.addEventListener('touchend', handleLookEnd, { passive: false });
+}
+
 // Function to update camera position based on WASD input
 const updateCameraPosition = () => {
     // Update camera rotation based on mouse movement (first-person)
@@ -232,8 +428,8 @@ const updateCameraPosition = () => {
     camera.rotation.y = yaw;
     camera.rotation.x = pitch;
     
-    // Calculate actual speed (with sprint if shift is pressed)
-    const actualSpeed = keyboard.shift ? moveSpeed * sprintMultiplier : moveSpeed;
+    // Calculate actual speed (with sprint if shift is pressed or mobile sprint button)
+    const actualSpeed = (keyboard.shift || touchControls.sprint) ? moveSpeed * sprintMultiplier : moveSpeed;
     
     // Get the camera's forward and right directions
     const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
@@ -245,17 +441,25 @@ const updateCameraPosition = () => {
     forward.normalize();
     right.normalize();
     
-    // Apply movement based on keys pressed (WASD and Arrow keys)
+    // Apply movement based on keys pressed (WASD, Arrow keys, and mobile joystick)
     const moveDirection = new THREE.Vector3(0, 0, 0);
     
-    // Forward movement (W or Up Arrow)
-    if (keyboard.w || keyboard.up) moveDirection.add(forward);
-    // Backward movement (S or Down Arrow)
-    if (keyboard.s || keyboard.down) moveDirection.sub(forward);
-    // Left movement (A or Left Arrow)
-    if (keyboard.a || keyboard.left) moveDirection.sub(right);
-    // Right movement (D or Right Arrow)
-    if (keyboard.d || keyboard.right) moveDirection.add(right);
+    // Forward movement (W, Up Arrow, or mobile joystick up)
+    if (keyboard.w || keyboard.up || (touchControls.joystick.active && touchControls.joystick.y < -10)) {
+        moveDirection.add(forward);
+    }
+    // Backward movement (S, Down Arrow, or mobile joystick down)
+    if (keyboard.s || keyboard.down || (touchControls.joystick.active && touchControls.joystick.y > 10)) {
+        moveDirection.sub(forward);
+    }
+    // Left movement (A, Left Arrow, or mobile joystick left)
+    if (keyboard.a || keyboard.left || (touchControls.joystick.active && touchControls.joystick.x < -10)) {
+        moveDirection.sub(right);
+    }
+    // Right movement (D, Right Arrow, or mobile joystick right)
+    if (keyboard.d || keyboard.right || (touchControls.joystick.active && touchControls.joystick.x > 10)) {
+        moveDirection.add(right);
+    }
     
     // Normalize and scale by speed
     if (moveDirection.length() > 0) {

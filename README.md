@@ -35,6 +35,7 @@ Inspired by the real shopping plazas found throughout suburban Massachusetts, th
 - **Forest Environment** - Dense tree coverage surrounding the plaza in suburban mode
 - **Suburban Elements** - Mailboxes, scattered trees, and bushes throughout the landscape
 - **WASD/Arrow key movement controls** - walk around and explore the plaza
+- **Mobile touch controls** - virtual joystick for movement and touch for camera rotation
 - **Mouse camera controls** - look around and take in the Massachusetts vibes
 
 ### Interactive Features
@@ -61,11 +62,22 @@ python3 -m http.server 8080
 ## Controls
 
 - **WASD Keys or Arrow Keys** - Move around the plaza (hold Shift to sprint)
+- **Mobile Touch Controls** - Virtual joystick for movement, touch and drag for camera rotation, RUN button for sprinting
 - **Mouse** - Click and drag to rotate the camera view
 - **Mouse Wheel** - Scroll to zoom in and out
 - **E Key** - Talk to NPCs when nearby (unlocks songs and stories)
 - **F Key** - Switch between Massachusetts Plaza and Forest Suburban scenes
 - **Spacebar** - Toggle between exterior and interior scenes (karaoke bar)
+
+## Mobile Controls
+
+The game automatically detects mobile devices and provides touch controls:
+
+- **Virtual Joystick** (bottom left) - Drag to move in any direction
+- **Touch & Drag** (anywhere else) - Look around and rotate the camera
+- **RUN Button** (bottom right) - Hold to sprint (same as Shift on desktop)
+
+The mobile controls are designed to be intuitive and responsive, allowing for smooth movement and camera control on touch devices.
 
 ## The Massachusetts Experience
 
