@@ -406,7 +406,29 @@ if (isMobile) {
         
         if (currentAction === 'talk') {
             // Handle NPC conversation
-            handleConversationInteraction();
+            if (hasActiveConversation()) {
+                // Continue ongoing conversation
+                const stillActive = advanceConversation();
+                if (stillActive) {
+                    const dialogue = getCurrentDialogue();
+                    interactionUI.style.display = 'block';
+                    showDialogueStep(dialogue);
+                } else {
+                    // Conversation ended
+                    interactionUI.style.display = 'none';
+                    setTimeout(() => {
+                        // Allow new interactions after a brief delay
+                    }, 1000);
+                }
+            } else if (nearbyNPC) {
+                // Start new conversation
+                const success = startConversation(nearbyNPC.userData.name, CURRENT_SCENE);
+                if (success) {
+                    const dialogue = getCurrentDialogue();
+                    interactionUI.style.display = 'block';
+                    showDialogueStep(dialogue);
+                }
+            }
         } else if (currentAction === 'travel') {
             // Handle scene switching
             const busStopPosition = new THREE.Vector3(-15, 0, PLAZA_CONFIG.NEAR_SIDEWALK_Z);
