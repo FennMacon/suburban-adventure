@@ -181,6 +181,7 @@ const sprintMultiplier = 2.0; // Speed multiplier when shift is pressed
 let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 let touchControls = {
     joystick: { active: false, x: 0, y: 0, centerX: 0, centerY: 0 },
+    lookJoystick: { active: false, x: 0, y: 0, centerX: 0, centerY: 0 },
     look: { active: false, startX: 0, startY: 0, lastX: 0, lastY: 0 },
     sprint: false
 };
@@ -281,11 +282,39 @@ if (isMobile) {
     joystick.appendChild(joystickKnob);
     mobileUI.appendChild(joystick);
 
-    // Dynamic action button (Talk/Travel)
+    // Look joystick for camera rotation (right side)
+    const lookJoystick = document.createElement('div');
+    lookJoystick.style.cssText = `
+        position: absolute;
+        bottom: 80px;
+        right: 80px;
+        width: 120px;
+        height: 120px;
+        border: 3px solid rgba(100, 100, 255, 0.3);
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.3);
+        pointer-events: auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    `;
+    
+    const lookJoystickKnob = document.createElement('div');
+    lookJoystickKnob.style.cssText = `
+        width: 40px;
+        height: 40px;
+        background: rgba(100, 100, 255, 0.8);
+        border-radius: 50%;
+        transition: transform 0.1s ease;
+    `;
+    lookJoystick.appendChild(lookJoystickKnob);
+    mobileUI.appendChild(lookJoystick);
+
+    // Dynamic action button (Talk/Travel) - moved to top right
     mobileActionButton = document.createElement('div');
     mobileActionButton.style.cssText = `
         position: absolute;
-        bottom: 80px;
+        top: 80px;
         right: 80px;
         width: 80px;
         height: 80px;
@@ -352,16 +381,69 @@ if (isMobile) {
         joystickKnob.style.transform = `translate(${touchControls.joystick.x}px, ${touchControls.joystick.y}px)`;
     };
 
-    // Touch event handlers for camera look
+    // Touch event handlers for look joystick
+    const handleLookJoystickStart = (e) => {
+        e.preventDefault();
+        const rect = lookJoystick.getBoundingClientRect();
+        touchControls.lookJoystick.centerX = rect.left + rect.width / 2;
+        touchControls.lookJoystick.centerY = rect.top + rect.height / 2;
+        touchControls.lookJoystick.active = true;
+        
+        const touch = e.touches ? e.touches[0] : e;
+        touchControls.lookJoystick.x = touch.clientX - touchControls.lookJoystick.centerX;
+        touchControls.lookJoystick.y = touch.clientY - touchControls.lookJoystick.centerY;
+        
+        updateLookJoystickPosition();
+    };
+
+    const handleLookJoystickMove = (e) => {
+        if (!touchControls.lookJoystick.active) return;
+        e.preventDefault();
+        
+        const touch = e.touches ? e.touches[0] : e;
+        touchControls.lookJoystick.x = touch.clientX - touchControls.lookJoystick.centerX;
+        touchControls.lookJoystick.y = touch.clientY - touchControls.lookJoystick.centerY;
+        
+        updateLookJoystickPosition();
+    };
+
+    const handleLookJoystickEnd = (e) => {
+        e.preventDefault();
+        touchControls.lookJoystick.active = false;
+        touchControls.lookJoystick.x = 0;
+        touchControls.lookJoystick.y = 0;
+        lookJoystickKnob.style.transform = 'translate(0, 0)';
+    };
+
+    const updateLookJoystickPosition = () => {
+        const maxDistance = 40; // Half of joystick radius
+        const distance = Math.sqrt(touchControls.lookJoystick.x * touchControls.lookJoystick.x + touchControls.lookJoystick.y * touchControls.lookJoystick.y);
+        
+        if (distance > maxDistance) {
+            const angle = Math.atan2(touchControls.lookJoystick.y, touchControls.lookJoystick.x);
+            touchControls.lookJoystick.x = Math.cos(angle) * maxDistance;
+            touchControls.lookJoystick.y = Math.sin(angle) * maxDistance;
+        }
+        
+        lookJoystickKnob.style.transform = `translate(${touchControls.lookJoystick.x}px, ${touchControls.lookJoystick.y}px)`;
+    };
+
+    // Touch event handlers for camera look (legacy - now using look joystick)
     const handleLookStart = (e) => {
-        // Only handle look if not touching joystick or action button
-        const rect = joystick.getBoundingClientRect();
+        // Only handle look if not touching any UI elements
+        const joystickRect = joystick.getBoundingClientRect();
+        const lookJoystickRect = lookJoystick.getBoundingClientRect();
         const actionRect = mobileActionButton.getBoundingClientRect();
         const touch = e.touches ? e.touches[0] : e;
         
-        if (touch.clientX >= rect.left && touch.clientX <= rect.right && 
-            touch.clientY >= rect.top && touch.clientY <= rect.bottom) {
-            return; // Touching joystick
+        if (touch.clientX >= joystickRect.left && touch.clientX <= joystickRect.right && 
+            touch.clientY >= joystickRect.top && touch.clientY <= joystickRect.bottom) {
+            return; // Touching movement joystick
+        }
+        
+        if (touch.clientX >= lookJoystickRect.left && touch.clientX <= lookJoystickRect.right && 
+            touch.clientY >= lookJoystickRect.top && touch.clientY <= lookJoystickRect.bottom) {
+            return; // Touching look joystick
         }
         
         if (touch.clientX >= actionRect.left && touch.clientX <= actionRect.right && 
@@ -544,6 +626,10 @@ if (isMobile) {
     joystick.addEventListener('touchmove', handleJoystickMove, { passive: false });
     joystick.addEventListener('touchend', handleJoystickEnd, { passive: false });
     
+    lookJoystick.addEventListener('touchstart', handleLookJoystickStart, { passive: false });
+    lookJoystick.addEventListener('touchmove', handleLookJoystickMove, { passive: false });
+    lookJoystick.addEventListener('touchend', handleLookJoystickEnd, { passive: false });
+    
     mobileActionButton.addEventListener('touchstart', handleActionStart, { passive: false });
     mobileActionButton.addEventListener('touchend', handleActionEnd, { passive: false });
     
@@ -602,7 +688,18 @@ const updateMobileActionButton = () => {
 
 // Function to update camera position based on WASD input
 const updateCameraPosition = () => {
-    // Update camera rotation based on mouse movement (first-person)
+    // Update camera rotation based on mouse movement and look joystick
+    if (isMobile && touchControls.lookJoystick.active) {
+        // Use look joystick for camera rotation on mobile
+        const lookSensitivity = 0.01;
+        yaw -= touchControls.lookJoystick.x * lookSensitivity;
+        pitch -= touchControls.lookJoystick.y * lookSensitivity;
+        
+        // Limit vertical look
+        const maxPitch = Math.PI / 3;
+        pitch = Math.max(-maxPitch, Math.min(maxPitch, pitch));
+    }
+    
     camera.rotation.order = 'YXZ';
     camera.rotation.y = yaw;
     camera.rotation.x = pitch;

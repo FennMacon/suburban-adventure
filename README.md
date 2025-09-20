@@ -62,7 +62,7 @@ python3 -m http.server 8080
 ## Controls
 
 - **WASD Keys or Arrow Keys** - Move around the plaza (hold Shift to sprint)
-- **Mobile Touch Controls** - Virtual joystick for movement, touch and drag for camera rotation, dynamic action button (Talk/Travel/Run)
+- **Mobile Touch Controls** - Dual virtual joysticks for movement and camera rotation, dynamic action button (Talk/Travel/Run)
 - **Mouse** - Click and drag to rotate the camera view
 - **Mouse Wheel** - Scroll to zoom in and out
 - **E Key** - Talk to NPCs when nearby (unlocks songs and stories)
@@ -71,16 +71,17 @@ python3 -m http.server 8080
 
 ## Mobile Controls
 
-The game automatically detects mobile devices and provides touch controls:
+The game automatically detects mobile devices and provides dual joystick controls:
 
-- **Virtual Joystick** (bottom left) - Drag to move in any direction
-- **Touch & Drag** (anywhere else) - Look around and rotate the camera
-- **Dynamic Action Button** (bottom right) - Changes based on what you're near:
+- **Movement Joystick** (bottom left) - Drag to move in any direction
+- **Look Joystick** (bottom right, blue) - Drag to look around and rotate the camera
+- **Dynamic Action Button** (top right) - Changes based on what you're near:
   - **TALK** (red) - When near an NPC, press to start a conversation
   - **TRAVEL** (green) - When near the bus stop, press to switch scenes
+  - **CONTINUE** (yellow) - When waiting for unlock confirmation
   - **RUN** (gray) - Default state, hold to sprint
 
-The mobile controls are designed to be intuitive and responsive, allowing for smooth movement and camera control on touch devices.
+The dual joystick system allows for simultaneous movement and camera control, similar to modern mobile games. You can move and look around at the same time for a more immersive experience.
 
 ## The Massachusetts Experience
 
