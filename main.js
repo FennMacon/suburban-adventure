@@ -172,8 +172,8 @@ document.addEventListener('pointerlockerror', onPointerLockError, false);
 
 // Controls UI removed - players can figure out basic FPS controls
 
-// Add WASD keyboard controls for camera movement
-const keyboard = { w: false, a: false, s: false, d: false, shift: false };
+// Add WASD and arrow keyboard controls for camera movement
+const keyboard = { w: false, a: false, s: false, d: false, shift: false, up: false, down: false, left: false, right: false };
 const moveSpeed = 0.2; // Speed of movement
 const sprintMultiplier = 2.0; // Speed multiplier when shift is pressed
 
@@ -185,6 +185,10 @@ document.addEventListener('keydown', (event) => {
         case 'KeyA': keyboard.a = true; break;
         case 'KeyS': keyboard.s = true; break;
         case 'KeyD': keyboard.d = true; break;
+        case 'ArrowUp': keyboard.up = true; break;
+        case 'ArrowDown': keyboard.down = true; break;
+        case 'ArrowLeft': keyboard.left = true; break;
+        case 'ArrowRight': keyboard.right = true; break;
         case 'ShiftLeft':
         case 'ShiftRight':
             keyboard.shift = true; break;
@@ -211,6 +215,10 @@ document.addEventListener('keyup', (event) => {
         case 'KeyA': keyboard.a = false; break;
         case 'KeyS': keyboard.s = false; break;
         case 'KeyD': keyboard.d = false; break;
+        case 'ArrowUp': keyboard.up = false; break;
+        case 'ArrowDown': keyboard.down = false; break;
+        case 'ArrowLeft': keyboard.left = false; break;
+        case 'ArrowRight': keyboard.right = false; break;
         case 'ShiftLeft':
         case 'ShiftRight':
             keyboard.shift = false; break;
@@ -237,13 +245,17 @@ const updateCameraPosition = () => {
     forward.normalize();
     right.normalize();
     
-    // Apply movement based on keys pressed
+    // Apply movement based on keys pressed (WASD and Arrow keys)
     const moveDirection = new THREE.Vector3(0, 0, 0);
     
-    if (keyboard.w) moveDirection.add(forward);
-    if (keyboard.s) moveDirection.sub(forward);
-    if (keyboard.a) moveDirection.sub(right);
-    if (keyboard.d) moveDirection.add(right);
+    // Forward movement (W or Up Arrow)
+    if (keyboard.w || keyboard.up) moveDirection.add(forward);
+    // Backward movement (S or Down Arrow)
+    if (keyboard.s || keyboard.down) moveDirection.sub(forward);
+    // Left movement (A or Left Arrow)
+    if (keyboard.a || keyboard.left) moveDirection.sub(right);
+    // Right movement (D or Right Arrow)
+    if (keyboard.d || keyboard.right) moveDirection.add(right);
     
     // Normalize and scale by speed
     if (moveDirection.length() > 0) {

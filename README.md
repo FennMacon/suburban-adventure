@@ -34,7 +34,7 @@ Inspired by the real shopping plazas found throughout suburban Massachusetts, th
 - **Enhanced starry night sky** with 600+ stars for that suburban evening ambiance
 - **Forest Environment** - Dense tree coverage surrounding the plaza in suburban mode
 - **Suburban Elements** - Mailboxes, scattered trees, and bushes throughout the landscape
-- **WASD movement controls** - walk around and explore the plaza
+- **WASD/Arrow key movement controls** - walk around and explore the plaza
 - **Mouse camera controls** - look around and take in the Massachusetts vibes
 
 ### Interactive Features
@@ -60,7 +60,7 @@ python3 -m http.server 8080
 
 ## Controls
 
-- **WASD Keys** - Move around the plaza (hold Shift to sprint)
+- **WASD Keys or Arrow Keys** - Move around the plaza (hold Shift to sprint)
 - **Mouse** - Click and drag to rotate the camera view
 - **Mouse Wheel** - Scroll to zoom in and out
 - **E Key** - Talk to NPCs when nearby (unlocks songs and stories)
