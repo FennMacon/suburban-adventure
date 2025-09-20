@@ -186,6 +186,9 @@ let touchControls = {
     sprint: false
 };
 
+// Track all active touches globally
+let activeTouches = new Map();
+
 // Mobile action button state
 let mobileActionButton = null;
 let currentAction = null; // 'talk', 'travel', or null
@@ -334,43 +337,113 @@ if (isMobile) {
     mobileActionButton.innerHTML = 'RUN';
     mobileUI.appendChild(mobileActionButton);
 
-    // Touch event handlers for joystick
-    const handleJoystickStart = (e) => {
-        e.preventDefault();
-        const rect = joystick.getBoundingClientRect();
-        touchControls.joystick.centerX = rect.left + rect.width / 2;
-        touchControls.joystick.centerY = rect.top + rect.height / 2;
-        touchControls.joystick.active = true;
+    // Helper function to find which control a touch belongs to
+    const findTouchTarget = (touch) => {
+        const joystickRect = joystick.getBoundingClientRect();
+        const lookJoystickRect = lookJoystick.getBoundingClientRect();
+        const actionRect = mobileActionButton.getBoundingClientRect();
         
-        const touch = e.touches ? e.touches[0] : e;
-        touchControls.joystick.touchId = touch.identifier;
-        touchControls.joystick.x = touch.clientX - touchControls.joystick.centerX;
-        touchControls.joystick.y = touch.clientY - touchControls.joystick.centerY;
+        if (touch.clientX >= joystickRect.left && touch.clientX <= joystickRect.right && 
+            touch.clientY >= joystickRect.top && touch.clientY <= joystickRect.bottom) {
+            return 'joystick';
+        }
         
-        updateJoystickPosition();
+        if (touch.clientX >= lookJoystickRect.left && touch.clientX <= lookJoystickRect.right && 
+            touch.clientY >= lookJoystickRect.top && touch.clientY <= lookJoystickRect.bottom) {
+            return 'lookJoystick';
+        }
+        
+        if (touch.clientX >= actionRect.left && touch.clientX <= actionRect.right && 
+            touch.clientY >= actionRect.top && touch.clientY <= actionRect.bottom) {
+            return 'actionButton';
+        }
+        
+        return null;
     };
 
-    const handleJoystickMove = (e) => {
-        if (!touchControls.joystick.active) return;
+    // Unified touch event handlers
+    const handleTouchStart = (e) => {
         e.preventDefault();
         
-        // Find the touch that matches our joystick's touchId
-        const touch = Array.from(e.touches).find(t => t.identifier === touchControls.joystick.touchId);
-        if (!touch) return;
-        
-        touchControls.joystick.x = touch.clientX - touchControls.joystick.centerX;
-        touchControls.joystick.y = touch.clientY - touchControls.joystick.centerY;
-        
-        updateJoystickPosition();
+        for (let i = 0; i < e.touches.length; i++) {
+            const touch = e.touches[i];
+            const target = findTouchTarget(touch);
+            
+            if (target === 'joystick' && !touchControls.joystick.active) {
+                const rect = joystick.getBoundingClientRect();
+                touchControls.joystick.centerX = rect.left + rect.width / 2;
+                touchControls.joystick.centerY = rect.top + rect.height / 2;
+                touchControls.joystick.active = true;
+                touchControls.joystick.touchId = touch.identifier;
+                touchControls.joystick.x = touch.clientX - touchControls.joystick.centerX;
+                touchControls.joystick.y = touch.clientY - touchControls.joystick.centerY;
+                updateJoystickPosition();
+            }
+            else if (target === 'lookJoystick' && !touchControls.lookJoystick.active) {
+                const rect = lookJoystick.getBoundingClientRect();
+                touchControls.lookJoystick.centerX = rect.left + rect.width / 2;
+                touchControls.lookJoystick.centerY = rect.top + rect.height / 2;
+                touchControls.lookJoystick.active = true;
+                touchControls.lookJoystick.touchId = touch.identifier;
+                touchControls.lookJoystick.x = touch.clientX - touchControls.lookJoystick.centerX;
+                touchControls.lookJoystick.y = touch.clientY - touchControls.lookJoystick.centerY;
+                updateLookJoystickPosition();
+            }
+            else if (target === 'actionButton') {
+                handleActionStart(e);
+            }
+        }
     };
 
-    const handleJoystickEnd = (e) => {
+    const handleTouchMove = (e) => {
         e.preventDefault();
-        touchControls.joystick.active = false;
-        touchControls.joystick.touchId = null;
-        touchControls.joystick.x = 0;
-        touchControls.joystick.y = 0;
-        joystickKnob.style.transform = 'translate(0, 0)';
+        
+        for (let i = 0; i < e.touches.length; i++) {
+            const touch = e.touches[i];
+            
+            // Handle movement joystick
+            if (touchControls.joystick.active && touch.identifier === touchControls.joystick.touchId) {
+                touchControls.joystick.x = touch.clientX - touchControls.joystick.centerX;
+                touchControls.joystick.y = touch.clientY - touchControls.joystick.centerY;
+                updateJoystickPosition();
+            }
+            
+            // Handle look joystick
+            if (touchControls.lookJoystick.active && touch.identifier === touchControls.lookJoystick.touchId) {
+                touchControls.lookJoystick.x = touch.clientX - touchControls.lookJoystick.centerX;
+                touchControls.lookJoystick.y = touch.clientY - touchControls.lookJoystick.centerY;
+                updateLookJoystickPosition();
+            }
+        }
+    };
+
+    const handleTouchEnd = (e) => {
+        e.preventDefault();
+        
+        for (let i = 0; i < e.changedTouches.length; i++) {
+            const touch = e.changedTouches[i];
+            
+            if (touchControls.joystick.active && touch.identifier === touchControls.joystick.touchId) {
+                touchControls.joystick.active = false;
+                touchControls.joystick.touchId = null;
+                touchControls.joystick.x = 0;
+                touchControls.joystick.y = 0;
+                joystickKnob.style.transform = 'translate(0, 0)';
+            }
+            
+            if (touchControls.lookJoystick.active && touch.identifier === touchControls.lookJoystick.touchId) {
+                touchControls.lookJoystick.active = false;
+                touchControls.lookJoystick.touchId = null;
+                touchControls.lookJoystick.x = 0;
+                touchControls.lookJoystick.y = 0;
+                lookJoystickKnob.style.transform = 'translate(0, 0)';
+            }
+        }
+        
+        // Handle action button end
+        if (e.changedTouches.length > 0) {
+            handleActionEnd(e);
+        }
     };
 
     const updateJoystickPosition = () => {
@@ -386,44 +459,6 @@ if (isMobile) {
         joystickKnob.style.transform = `translate(${touchControls.joystick.x}px, ${touchControls.joystick.y}px)`;
     };
 
-    // Touch event handlers for look joystick
-    const handleLookJoystickStart = (e) => {
-        e.preventDefault();
-        const rect = lookJoystick.getBoundingClientRect();
-        touchControls.lookJoystick.centerX = rect.left + rect.width / 2;
-        touchControls.lookJoystick.centerY = rect.top + rect.height / 2;
-        touchControls.lookJoystick.active = true;
-        
-        const touch = e.touches ? e.touches[0] : e;
-        touchControls.lookJoystick.touchId = touch.identifier;
-        touchControls.lookJoystick.x = touch.clientX - touchControls.lookJoystick.centerX;
-        touchControls.lookJoystick.y = touch.clientY - touchControls.lookJoystick.centerY;
-        
-        updateLookJoystickPosition();
-    };
-
-    const handleLookJoystickMove = (e) => {
-        if (!touchControls.lookJoystick.active) return;
-        e.preventDefault();
-        
-        // Find the touch that matches our look joystick's touchId
-        const touch = Array.from(e.touches).find(t => t.identifier === touchControls.lookJoystick.touchId);
-        if (!touch) return;
-        
-        touchControls.lookJoystick.x = touch.clientX - touchControls.lookJoystick.centerX;
-        touchControls.lookJoystick.y = touch.clientY - touchControls.lookJoystick.centerY;
-        
-        updateLookJoystickPosition();
-    };
-
-    const handleLookJoystickEnd = (e) => {
-        e.preventDefault();
-        touchControls.lookJoystick.active = false;
-        touchControls.lookJoystick.touchId = null;
-        touchControls.lookJoystick.x = 0;
-        touchControls.lookJoystick.y = 0;
-        lookJoystickKnob.style.transform = 'translate(0, 0)';
-    };
 
     const updateLookJoystickPosition = () => {
         const maxDistance = 40; // Half of joystick radius
@@ -438,63 +473,6 @@ if (isMobile) {
         lookJoystickKnob.style.transform = `translate(${touchControls.lookJoystick.x}px, ${touchControls.lookJoystick.y}px)`;
     };
 
-    // Touch event handlers for camera look (legacy - now using look joystick)
-    const handleLookStart = (e) => {
-        // Only handle look if not touching any UI elements
-        const joystickRect = joystick.getBoundingClientRect();
-        const lookJoystickRect = lookJoystick.getBoundingClientRect();
-        const actionRect = mobileActionButton.getBoundingClientRect();
-        
-        // Check all touches to see if any are on UI elements
-        for (let i = 0; i < e.touches.length; i++) {
-            const touch = e.touches[i];
-            
-            if (touch.clientX >= joystickRect.left && touch.clientX <= joystickRect.right && 
-                touch.clientY >= joystickRect.top && touch.clientY <= joystickRect.bottom) {
-                return; // Touching movement joystick
-            }
-            
-            if (touch.clientX >= lookJoystickRect.left && touch.clientX <= lookJoystickRect.right && 
-                touch.clientY >= lookJoystickRect.top && touch.clientY <= lookJoystickRect.bottom) {
-                return; // Touching look joystick
-            }
-            
-            if (touch.clientX >= actionRect.left && touch.clientX <= actionRect.right && 
-                touch.clientY >= actionRect.top && touch.clientY <= actionRect.bottom) {
-                return; // Touching action button
-            }
-        }
-        
-        e.preventDefault();
-        touchControls.look.active = true;
-        touchControls.look.startX = touch.clientX;
-        touchControls.look.startY = touch.clientY;
-        touchControls.look.lastX = touch.clientX;
-        touchControls.look.lastY = touch.clientY;
-    };
-
-    const handleLookMove = (e) => {
-        if (!touchControls.look.active) return;
-        e.preventDefault();
-        
-        const touch = e.touches ? e.touches[0] : e;
-        const deltaX = touch.clientX - touchControls.look.lastX;
-        const deltaY = touch.clientY - touchControls.look.lastY;
-        
-        yaw -= deltaX * mouseSensitivity * 2; // Slightly more sensitive for touch
-        pitch -= deltaY * mouseSensitivity * 2;
-        
-        // Limit vertical look
-        pitch = Math.max(-maxPitch, Math.min(maxPitch, pitch));
-        
-        touchControls.look.lastX = touch.clientX;
-        touchControls.look.lastY = touch.clientY;
-    };
-
-    const handleLookEnd = (e) => {
-        e.preventDefault();
-        touchControls.look.active = false;
-    };
 
     // Action button handlers
     const handleActionStart = (e) => {
@@ -635,21 +613,11 @@ if (isMobile) {
         mobileActionButton.style.background = 'rgba(0, 0, 0, 0.3)';
     };
 
-    // Add event listeners
-    joystick.addEventListener('touchstart', handleJoystickStart, { passive: false });
-    joystick.addEventListener('touchmove', handleJoystickMove, { passive: false });
-    joystick.addEventListener('touchend', handleJoystickEnd, { passive: false });
-    
-    lookJoystick.addEventListener('touchstart', handleLookJoystickStart, { passive: false });
-    lookJoystick.addEventListener('touchmove', handleLookJoystickMove, { passive: false });
-    lookJoystick.addEventListener('touchend', handleLookJoystickEnd, { passive: false });
-    
-    mobileActionButton.addEventListener('touchstart', handleActionStart, { passive: false });
-    mobileActionButton.addEventListener('touchend', handleActionEnd, { passive: false });
-    
-    document.addEventListener('touchstart', handleLookStart, { passive: false });
-    document.addEventListener('touchmove', handleLookMove, { passive: false });
-    document.addEventListener('touchend', handleLookEnd, { passive: false });
+    // Add unified touch event listeners to the document
+    document.addEventListener('touchstart', handleTouchStart, { passive: false });
+    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+    document.addEventListener('touchend', handleTouchEnd, { passive: false });
+    document.addEventListener('touchcancel', handleTouchEnd, { passive: false });
 }
 
 // Function to update mobile action button based on proximity
