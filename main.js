@@ -405,6 +405,26 @@ if (isMobile) {
         e.preventDefault();
         
         if (currentAction === 'talk') {
+            // Check if we're waiting for unlock confirmation
+            if (window.mobileWaitingForUnlockConfirm) {
+                // Handle unlock confirmation
+                endConversation();
+                // Force update nearby NPC detection
+                checkNearbyNPCs();
+                // Clear the mobile flag
+                window.mobileWaitingForUnlockConfirm = false;
+                if (nearbyNPC) {
+                    const npcName = nearbyNPC.userData.name;
+                    interactionUI.innerHTML = `
+                        <div>Near ${npcName}</div>
+                        <div style="font-size: 14px; margin-top: 5px;">Press 'E' to talk</div>
+                    `;
+                } else {
+                    interactionUI.style.display = 'none';
+                }
+                return;
+            }
+            
             // Handle NPC conversation
             if (hasActiveConversation()) {
                 // Check if conversation is at the end waiting for final press
@@ -422,11 +442,17 @@ if (isMobile) {
                             </div>
                         `;
                         
+                        // For mobile, we need to handle this differently
+                        // Set a flag to indicate we're waiting for unlock confirmation
+                        window.mobileWaitingForUnlockConfirm = true;
+                        
                         setTimeout(() => {
                             const endConversationHandler = () => {
                                 endConversation();
                                 // Force update nearby NPC detection
                                 checkNearbyNPCs();
+                                // Clear the mobile flag
+                                window.mobileWaitingForUnlockConfirm = false;
                                 if (nearbyNPC) {
                                     const npcName = nearbyNPC.userData.name;
                                     interactionUI.innerHTML = `
@@ -535,8 +561,14 @@ const updateMobileActionButton = () => {
     let buttonText = 'RUN';
     let buttonColor = 'rgba(0, 0, 0, 0.3)';
     
+    // Check if we're waiting for unlock confirmation
+    if (window.mobileWaitingForUnlockConfirm) {
+        newAction = 'talk';
+        buttonText = 'CONTINUE';
+        buttonColor = 'rgba(255, 255, 100, 0.3)';
+    }
     // Check for nearby NPCs
-    if (streetElements.npcs) {
+    else if (streetElements.npcs) {
         for (let npc of streetElements.npcs) {
             const distance = cameraPosition.distanceTo(npc.position);
             if (distance < 3) {
