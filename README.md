@@ -75,7 +75,7 @@ The game automatically detects mobile devices and provides dual joystick control
 
 - **Movement Joystick** (bottom left) - Drag to move in any direction
 - **Look Joystick** (bottom right, blue) - Drag to look around and rotate the camera
-- **Dynamic Action Button** (top right) - Changes based on what you're near:
+- **Dynamic Action Button** (above look joystick) - Changes based on what you're near:
   - **TALK** (red) - When near an NPC, press to start a conversation
   - **TRAVEL** (green) - When near the bus stop, press to switch scenes
   - **CONTINUE** (yellow) - When waiting for unlock confirmation

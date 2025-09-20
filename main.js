@@ -180,8 +180,8 @@ const sprintMultiplier = 2.0; // Speed multiplier when shift is pressed
 // Mobile touch controls
 let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 let touchControls = {
-    joystick: { active: false, x: 0, y: 0, centerX: 0, centerY: 0 },
-    lookJoystick: { active: false, x: 0, y: 0, centerX: 0, centerY: 0 },
+    joystick: { active: false, x: 0, y: 0, centerX: 0, centerY: 0, touchId: null },
+    lookJoystick: { active: false, x: 0, y: 0, centerX: 0, centerY: 0, touchId: null },
     look: { active: false, startX: 0, startY: 0, lastX: 0, lastY: 0 },
     sprint: false
 };
@@ -310,11 +310,11 @@ if (isMobile) {
     lookJoystick.appendChild(lookJoystickKnob);
     mobileUI.appendChild(lookJoystick);
 
-    // Dynamic action button (Talk/Travel) - moved to top right
+    // Dynamic action button (Talk/Travel) - moved above look joystick
     mobileActionButton = document.createElement('div');
     mobileActionButton.style.cssText = `
         position: absolute;
-        top: 80px;
+        bottom: 220px;
         right: 80px;
         width: 80px;
         height: 80px;
@@ -343,6 +343,7 @@ if (isMobile) {
         touchControls.joystick.active = true;
         
         const touch = e.touches ? e.touches[0] : e;
+        touchControls.joystick.touchId = touch.identifier;
         touchControls.joystick.x = touch.clientX - touchControls.joystick.centerX;
         touchControls.joystick.y = touch.clientY - touchControls.joystick.centerY;
         
@@ -353,7 +354,10 @@ if (isMobile) {
         if (!touchControls.joystick.active) return;
         e.preventDefault();
         
-        const touch = e.touches ? e.touches[0] : e;
+        // Find the touch that matches our joystick's touchId
+        const touch = Array.from(e.touches).find(t => t.identifier === touchControls.joystick.touchId);
+        if (!touch) return;
+        
         touchControls.joystick.x = touch.clientX - touchControls.joystick.centerX;
         touchControls.joystick.y = touch.clientY - touchControls.joystick.centerY;
         
@@ -363,6 +367,7 @@ if (isMobile) {
     const handleJoystickEnd = (e) => {
         e.preventDefault();
         touchControls.joystick.active = false;
+        touchControls.joystick.touchId = null;
         touchControls.joystick.x = 0;
         touchControls.joystick.y = 0;
         joystickKnob.style.transform = 'translate(0, 0)';
@@ -390,6 +395,7 @@ if (isMobile) {
         touchControls.lookJoystick.active = true;
         
         const touch = e.touches ? e.touches[0] : e;
+        touchControls.lookJoystick.touchId = touch.identifier;
         touchControls.lookJoystick.x = touch.clientX - touchControls.lookJoystick.centerX;
         touchControls.lookJoystick.y = touch.clientY - touchControls.lookJoystick.centerY;
         
@@ -400,7 +406,10 @@ if (isMobile) {
         if (!touchControls.lookJoystick.active) return;
         e.preventDefault();
         
-        const touch = e.touches ? e.touches[0] : e;
+        // Find the touch that matches our look joystick's touchId
+        const touch = Array.from(e.touches).find(t => t.identifier === touchControls.lookJoystick.touchId);
+        if (!touch) return;
+        
         touchControls.lookJoystick.x = touch.clientX - touchControls.lookJoystick.centerX;
         touchControls.lookJoystick.y = touch.clientY - touchControls.lookJoystick.centerY;
         
@@ -410,6 +419,7 @@ if (isMobile) {
     const handleLookJoystickEnd = (e) => {
         e.preventDefault();
         touchControls.lookJoystick.active = false;
+        touchControls.lookJoystick.touchId = null;
         touchControls.lookJoystick.x = 0;
         touchControls.lookJoystick.y = 0;
         lookJoystickKnob.style.transform = 'translate(0, 0)';
@@ -434,21 +444,25 @@ if (isMobile) {
         const joystickRect = joystick.getBoundingClientRect();
         const lookJoystickRect = lookJoystick.getBoundingClientRect();
         const actionRect = mobileActionButton.getBoundingClientRect();
-        const touch = e.touches ? e.touches[0] : e;
         
-        if (touch.clientX >= joystickRect.left && touch.clientX <= joystickRect.right && 
-            touch.clientY >= joystickRect.top && touch.clientY <= joystickRect.bottom) {
-            return; // Touching movement joystick
-        }
-        
-        if (touch.clientX >= lookJoystickRect.left && touch.clientX <= lookJoystickRect.right && 
-            touch.clientY >= lookJoystickRect.top && touch.clientY <= lookJoystickRect.bottom) {
-            return; // Touching look joystick
-        }
-        
-        if (touch.clientX >= actionRect.left && touch.clientX <= actionRect.right && 
-            touch.clientY >= actionRect.top && touch.clientY <= actionRect.bottom) {
-            return; // Touching action button
+        // Check all touches to see if any are on UI elements
+        for (let i = 0; i < e.touches.length; i++) {
+            const touch = e.touches[i];
+            
+            if (touch.clientX >= joystickRect.left && touch.clientX <= joystickRect.right && 
+                touch.clientY >= joystickRect.top && touch.clientY <= joystickRect.bottom) {
+                return; // Touching movement joystick
+            }
+            
+            if (touch.clientX >= lookJoystickRect.left && touch.clientX <= lookJoystickRect.right && 
+                touch.clientY >= lookJoystickRect.top && touch.clientY <= lookJoystickRect.bottom) {
+                return; // Touching look joystick
+            }
+            
+            if (touch.clientX >= actionRect.left && touch.clientX <= actionRect.right && 
+                touch.clientY >= actionRect.top && touch.clientY <= actionRect.bottom) {
+                return; // Touching action button
+            }
         }
         
         e.preventDefault();
