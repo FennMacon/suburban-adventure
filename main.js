@@ -1,1257 +1,266 @@
+// main.js - Refactored version using modular structure
+// This is the streamlined orchestration file
+
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { createWireframeMaterial } from './utils.js';
+
+// Import from our new modular files
+import { createWireframeMaterial, createCar, getRandomCarColor, createTree, createBush } from './utils.js';
 import { createNightSky, updateNightSky } from './nightsky.js';
 import { createSkybox, updateSkybox } from './skybox.js';
-import { createParkElements, createBuildingFacade } from './buildings.js';
-import { createNPCs } from './npcs.js';
+import { createParkElements, createBuildingFacade, createInteriorScene, createGlowingWireframeMaterial, createPondElements, createCumbysInterior, createShopInterior, createChurchInterior, createTownHallInterior, createHouseInterior, createHospitalInterior, createModernInterior, createBrickInterior, createIndustrialInterior, createGraveyardInterior, INTERIOR_TARGET_SIZE } from './buildings.js';
+import { createNPCs, createInteriorNPCs, initializeNPCInteraction, checkNearbyNPCs, checkNearbyItems, checkBusStopProximity, initializeConversationHandlers, getNextSceneInfo } from './npcs.js';
 import { getCurrentScene, getPlazaConfig, SCENE_CONFIGS } from './scenes.js';
 import { 
-    startConversation, 
-    advanceConversation, 
-    endConversation, 
-    hasActiveConversation, 
-    getCurrentDialogue,
-    getUnlockedSongs,
-    checkIfLastLine,
-    unlockCurrentSong,
-    conversationAtEnd,
-    setConversationAtEnd
+    startConversation, advanceConversation, endConversation, hasActiveConversation, 
+    getCurrentDialogue, getUnlockedSongs, checkIfLastLine, unlockCurrentSong, 
+    getConversationAtEnd, setConversationAtEnd
 } from './dialogue.js';
+import { initializeControls, updateCameraPosition, isMobile, getMobileActionButton, updateMobileActionButton, setCurrentAction } from './controls.js';
+import { initializeRenderer, initializePostProcessing, renderScene, handleResize, getRenderer } from './renderer.js';
+import { createAnimationLoop } from './animation.js';
+import { initializePhoneUI, initializePhoneKeyboard, updatePhoneDebugInfo } from './phone-ui.js';
 
-// Scene setup
+// =====================================================
+// SCENE SETUP
+// =====================================================
 const scene = new THREE.Scene();
-// Background will be handled by skybox
 
-// Add PS2-style fog for retro aesthetic
-scene.fog = new THREE.Fog(0x1a1a2e, 50, 200); // Dark blue fog, starts at 50 units, fully opaque at 200
+const INTERIOR_CAMERA_OFFSET = 5;
+const INTERIOR_HALF_SIZE = INTERIOR_TARGET_SIZE / 2;
+const INTERIOR_CAMERA_Z = Math.max(0, INTERIOR_HALF_SIZE - INTERIOR_CAMERA_OFFSET);
 
-// Scene Configuration System (now imported from scenes.js)
+// =====================================================
+// DEBUG OVERLAY SETUP
+// =====================================================
+let debugInfo = {
+    cameraPosition: { x: 0, y: 0, z: 0 },
+    cameraSpeed: 0,
+    lastPosition: { x: 0, y: 0, z: 0 },
+    lastTime: Date.now(),
+    fps: 0,
+    frameCount: 0,
+    lastFpsTime: Date.now()
+};
 
-// Current active scene - load from localStorage or default to PLAZA
+// Create debug overlay
+const createDebugOverlay = () => {
+    const debugDiv = document.createElement('div');
+    debugDiv.id = 'debug-overlay';
+    debugDiv.style.cssText = `
+        position: fixed;
+        top: 10px;
+        left: 10px;
+        background: rgba(0, 0, 0, 0.8);
+        color: #00ff00;
+        font-family: 'Courier New', monospace;
+        font-size: 12px;
+        padding: 10px;
+        border-radius: 5px;
+        z-index: 1000;
+        min-width: 200px;
+        border: 1px solid #00ff00;
+    `;
+    
+    debugDiv.innerHTML = `
+        <div><strong>🐛 DEBUG INFO</strong></div>
+        <div>Camera Position: <span id="cam-pos">0, 0, 0</span></div>
+        <div>Camera Speed: <span id="cam-speed">0.00</span> units/sec</div>
+        <div>FPS: <span id="fps">60</span></div>
+        <div>Scene: <span id="scene-name">Loading...</span></div>
+        <div>Time: <span id="time">00:00</span></div>
+    `;
+    
+    document.body.appendChild(debugDiv);
+    return debugDiv;
+};
+
+// Update debug info
+const updateDebugInfo = (camera, controls) => {
+    const now = Date.now();
+    const deltaTime = (now - debugInfo.lastTime) / 1000;
+    
+    // Update camera position
+    debugInfo.cameraPosition.x = camera.position.x.toFixed(2);
+    debugInfo.cameraPosition.y = camera.position.y.toFixed(2);
+    debugInfo.cameraPosition.z = camera.position.z.toFixed(2);
+    
+    // Calculate speed
+    const distance = Math.sqrt(
+        Math.pow(camera.position.x - debugInfo.lastPosition.x, 2) +
+        Math.pow(camera.position.y - debugInfo.lastPosition.y, 2) +
+        Math.pow(camera.position.z - debugInfo.lastPosition.z, 2)
+    );
+    debugInfo.cameraSpeed = deltaTime > 0 ? (distance / deltaTime).toFixed(2) : 0;
+    
+    // Update FPS
+    debugInfo.frameCount++;
+    if (now - debugInfo.lastFpsTime >= 1000) {
+        debugInfo.fps = Math.round(debugInfo.frameCount * 1000 / (now - debugInfo.lastFpsTime));
+        debugInfo.frameCount = 0;
+        debugInfo.lastFpsTime = now;
+    }
+    
+    // Update phone UI with debug info
+    updatePhoneDebugInfo({
+        scene: PLAZA_CONFIG.name,
+        time: new Date().toLocaleTimeString(),
+        fps: debugInfo.fps,
+        cameraPosition: {
+            x: debugInfo.cameraPosition.x,
+            y: debugInfo.cameraPosition.y,
+            z: debugInfo.cameraPosition.z
+        },
+        cameraSpeed: debugInfo.cameraSpeed
+    });
+    
+    // Store current position for next frame
+    debugInfo.lastPosition.x = camera.position.x;
+    debugInfo.lastPosition.y = camera.position.y;
+    debugInfo.lastPosition.z = camera.position.z;
+    debugInfo.lastTime = now;
+};
+
+// Current active scene configuration
 let CURRENT_SCENE = getCurrentScene();
 let PLAZA_CONFIG = getPlazaConfig(CURRENT_SCENE);
 
-// Function to switch scenes
+console.log('🎬 Loading scene:', CURRENT_SCENE, 'Config:', PLAZA_CONFIG.name);
+console.log('Scene flags:', {
+    FRONT_IS_PARK: PLAZA_CONFIG.FRONT_IS_PARK,
+    FRONT_IS_POND: PLAZA_CONFIG.FRONT_IS_POND,
+    HAUNTED_ATMOSPHERE: PLAZA_CONFIG.HAUNTED_ATMOSPHERE
+});
+
+// Adjust fog based on scene atmosphere
+// Disable fog for interior scenes
+if (PLAZA_CONFIG.IS_INTERIOR) {
+    scene.fog = null;
+} else {
+    const fogColor = PLAZA_CONFIG.HAUNTED_ATMOSPHERE ? 0x1a1f2e : 0x1a1a2e;
+    const fogNear = PLAZA_CONFIG.HAUNTED_ATMOSPHERE ? 30 : 50;
+    const fogFar = PLAZA_CONFIG.HAUNTED_ATMOSPHERE ? 150 : 200;
+    scene.fog = new THREE.Fog(fogColor, fogNear, fogFar);
+}
+
+// Scene switching function
 const switchScene = (sceneName) => {
     if (SCENE_CONFIGS[sceneName]) {
         CURRENT_SCENE = sceneName;
         PLAZA_CONFIG = SCENE_CONFIGS[sceneName];
         
-        // Save current camera position (should be at bus stop)
         const cameraPos = camera.position;
-        const busStopCameraPosition = {
-            x: -15, // Bus stop X position
-            y: cameraPos.y, // Keep current height
-            z: SCENE_CONFIGS[sceneName].NEAR_SIDEWALK_Z + 3 // A bit back from the bus stop in new scene
-        };
-        localStorage.setItem('busStopCameraPosition', JSON.stringify(busStopCameraPosition));
         
-        // Save scene choice to localStorage
+        // Handle interior scenes differently
+        if (PLAZA_CONFIG.IS_INTERIOR) {
+            // For interior scenes, start camera at the door looking in
+            // All interiors are 75x75, door is at z ≈ 37.5 (storeDepth/2)
+            // Position camera just inside the door (z ≈ 32.5) looking inward
+            const interiorCameraPosition = {
+                x: 0,
+                y: cameraPos.y,
+                z: INTERIOR_CAMERA_Z // Just inside the door (door depth - offset)
+            };
+            localStorage.setItem('interiorCameraPosition', JSON.stringify(interiorCameraPosition));
+        } else {
+            // For exterior scenes, check if we're returning from an interior
+            const savedPortalPosition = localStorage.getItem('buildingPortalPosition');
+            if (savedPortalPosition) {
+                // Use the saved building portal position
+                localStorage.setItem('busStopCameraPosition', savedPortalPosition);
+                localStorage.removeItem('buildingPortalPosition');
+                
+                // Check if we're exiting from a far-side building
+                // Far buildings face the street, so we should NOT rotate 180 (face forward/toward street)
+                const isFarBuilding = localStorage.getItem('isFarBuilding') === 'true';
+                localStorage.setItem('isFarBuildingExit', isFarBuilding ? 'true' : 'false');
+                localStorage.removeItem('isFarBuilding');
+                console.log(`Restoring building portal position: ${savedPortalPosition}, isFarBuilding: ${isFarBuilding}`);
+            } else {
+                // Default to bus stop position
+                const busStopCameraPosition = {
+                    x: -15,
+                    y: cameraPos.y,
+                    z: SCENE_CONFIGS[sceneName].NEAR_SIDEWALK_Z + 3
+                };
+                localStorage.setItem('busStopCameraPosition', JSON.stringify(busStopCameraPosition));
+            }
+        }
+        
         localStorage.setItem('suburbanAdventureScene', sceneName);
         console.log(`Switching to ${PLAZA_CONFIG.name}`);
-        // Trigger scene rebuild
         location.reload();
     }
 };
 
-/*
-HOW TO USE THE ROW GROUPING SYSTEM:
-
-1. MOVE ENTIRE SHOP ROW: 
-   streetElements.frontShopsGroup.position.z = newZPosition;
-   
-2. MOVE ENTIRE FAR BUILDINGS ROW:
-   streetElements.farBuildingsGroup.position.z = newZPosition;
-   
-3. MOVE STREET ELEMENTS:
-   streetElements.nearSidewalkElementsGroup.position.z = newZPosition;  // Near sidewalk stuff
-   streetElements.streetElementsGroup.position.z = newZPosition;        // Cars, buses
-   streetElements.farSidewalkElementsGroup.position.z = newZPosition;   // Far sidewalk stuff
-   
-4. ADJUST ALL POSITIONS AT ONCE:
-   Change values in PLAZA_CONFIG above, all elements will use them
-   
-5. ACCESS GROUPS:
-   - streetElements.frontShopsGroup - Contains all shops + complete karaoke bar (building, door, windows, sign, text, interior: bar, stools, tables, chairs, stage, microphone, TV, speakers, beers, signup sheet, fairies)
-   - streetElements.farBuildingsGroup - Contains all background buildings
-   - streetElements.nearSidewalkElementsGroup - Contains streetlights, benches, trash cans, bus stop (near)
-   - streetElements.streetElementsGroup - Contains cars, buses (vehicles on street)
-   - streetElements.farSidewalkElementsGroup - Contains streetlights, benches, trash cans (far)
-   
-6. ELEMENTS IN GROUPS:
-   - All individual elements positioned at their X coordinates, Z=0 (group handles Z)
-   - Near sidewalk: streetlights, benches, trash cans, bus stop
-   - Street: cars, buses (with relative lane positioning)
-   - Far sidewalk: streetlights, benches, trash cans
-   - All Z positioning is handled by the group that contains each element
-   
-7. LANE SYSTEM (within streetElementsGroup):
-   - Left lane (cars going left): Z = +2 (relative to street group)
-   - Right lane (cars going right): Z = -2 (relative to street group)  
-   - Bus lane (far right): Z = -5 (relative to street group)
-   - Street group itself positioned at PLAZA_CONFIG.STREET_Z (11)
-*/
-
-// Track the orbiting center point for fairies
-let fairyOrbitCenter = new THREE.Vector3(0, 6, -10); // Default position
-let fairyOrbitTime = 0;
-
-// Share scene reference with audio.js for test buttons
-if (typeof setSceneReference === 'function') {
-    setSceneReference(scene);
-}
-
-// Camera setup
+// =====================================================
+// CAMERA SETUP
+// =====================================================
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 
-// Check if we're returning from a bus stop scene switch
 const savedBusStopPosition = localStorage.getItem('busStopCameraPosition');
+const savedInteriorPosition = localStorage.getItem('interiorCameraPosition');
 let shouldRotate180 = false;
-if (savedBusStopPosition) {
-    const busStopPos = JSON.parse(savedBusStopPosition);
-    camera.position.set(busStopPos.x, busStopPos.y, busStopPos.z);
-    shouldRotate180 = true; // Flag to rotate 180° after yaw is initialized
-    localStorage.removeItem('busStopCameraPosition'); // Clean up after use
+
+if (savedInteriorPosition) {
+    // Handle interior scene camera position
+    const pos = JSON.parse(savedInteriorPosition);
+    camera.position.set(pos.x, pos.y, pos.z);
+    localStorage.removeItem('interiorCameraPosition');
+    shouldRotate180 = false;
+} else if (savedBusStopPosition) {
+    // Handle exterior scene camera position (from bus stop or building portal)
+    const pos = JSON.parse(savedBusStopPosition);
+    camera.position.set(pos.x, pos.y, pos.z);
+    localStorage.removeItem('busStopCameraPosition');
+    
+    // Check if we're exiting from a far-side building
+    // Far buildings face the street, so we should NOT rotate 180 (face forward/toward street)
+    const isFarBuildingExit = localStorage.getItem('isFarBuildingExit') === 'true';
+    shouldRotate180 = !isFarBuildingExit; // Only rotate 180 if NOT a far building
+    localStorage.removeItem('isFarBuildingExit');
+    console.log(`Camera position restored, shouldRotate180: ${shouldRotate180} (isFarBuildingExit: ${isFarBuildingExit})`);
 } else {
-    camera.position.set(0, 2, PLAZA_CONFIG.CAMERA_START_Z); // Default starting position
+    // Default camera position
+    if (PLAZA_CONFIG.IS_INTERIOR) {
+        // All interiors are 75x75, door is at z ≈ 37.5
+        // Position camera just inside the door looking inward
+        camera.position.set(0, 2, INTERIOR_CAMERA_Z); // Just inside the door for interior scenes
+    } else {
+        camera.position.set(0, 2, PLAZA_CONFIG.CAMERA_START_Z);
+    }
 }
 
-// Renderer setup
-const renderer = new THREE.WebGLRenderer({
-    antialias: false, // Disable antialiasing for pixelated effect
-    alpha: true
-});
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(1); // Force pixel ratio to 1 for more pixelated look
-document.body.appendChild(renderer.domElement);
+// =====================================================
+// RENDERER SETUP (Using new module)
+// =====================================================
+const renderer = initializeRenderer();
+const { renderTarget, postBufferA, postBufferB, postCamera, postMaterial, postScene } = initializePostProcessing();
 
-// First-person camera controls
-let mouseX = 0, mouseY = 0;
-let pitch = 0, yaw = 0;
-const mouseSensitivity = 0.002;
-const maxPitch = Math.PI / 3; // Limit vertical look range
+// =====================================================
+// CONTROLS SETUP (Using new module)
+// =====================================================
+initializeControls(camera, renderer.domElement, shouldRotate180);
 
-// Apply 180° rotation if returning from bus travel
-if (shouldRotate180) {
-    yaw = Math.PI; // Face opposite direction (180°)
-}
+// =====================================================
+// LIGHTING
+// =====================================================
+// Adjust lighting based on scene atmosphere
+const ambientIntensity = PLAZA_CONFIG.HAUNTED_ATMOSPHERE ? 0.3 : 0.5;
+const directionalIntensity = PLAZA_CONFIG.HAUNTED_ATMOSPHERE ? 0.5 : 0.8;
 
-// Pointer lock for first-person controls
-let isPointerLocked = false;
-
-const onMouseMove = (event) => {
-    if (!isPointerLocked) return;
-    
-    mouseX = event.movementX;
-    mouseY = event.movementY;
-    
-    yaw -= mouseX * mouseSensitivity;
-    pitch -= mouseY * mouseSensitivity;
-    
-    // Limit vertical look
-    pitch = Math.max(-maxPitch, Math.min(maxPitch, pitch));
-};
-
-const onPointerLockChange = () => {
-    isPointerLocked = document.pointerLockElement === renderer.domElement;
-};
-
-const onPointerLockError = () => {
-    console.log('Pointer lock error');
-};
-
-// Click to enable mouse look
-renderer.domElement.addEventListener('click', () => {
-    renderer.domElement.requestPointerLock();
-});
-
-document.addEventListener('mousemove', onMouseMove, false);
-document.addEventListener('pointerlockchange', onPointerLockChange, false);
-document.addEventListener('pointerlockerror', onPointerLockError, false);
-
-// Controls UI removed - players can figure out basic FPS controls
-
-// Add WASD and arrow keyboard controls for camera movement
-const keyboard = { w: false, a: false, s: false, d: false, shift: false, up: false, down: false, left: false, right: false };
-const moveSpeed = 0.2; // Speed of movement
-const sprintMultiplier = 2.0; // Speed multiplier when shift is pressed
-
-// Mobile touch controls
-let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-let touchControls = {
-    joystick: { active: false, x: 0, y: 0, centerX: 0, centerY: 0, touchId: null },
-    lookJoystick: { active: false, x: 0, y: 0, centerX: 0, centerY: 0, touchId: null },
-    look: { active: false, startX: 0, startY: 0, lastX: 0, lastY: 0 },
-    sprint: false
-};
-
-// Track all active touches globally
-let activeTouches = new Map();
-
-// Mobile action button state
-let mobileActionButton = null;
-let currentAction = null; // 'talk', 'travel', or null
-
-// Camera movement function updated for first-person controls
-
-document.addEventListener('keydown', (event) => {
-    switch(event.code) {
-        case 'KeyW': keyboard.w = true; break;
-        case 'KeyA': keyboard.a = true; break;
-        case 'KeyS': keyboard.s = true; break;
-        case 'KeyD': keyboard.d = true; break;
-        case 'ArrowUp': keyboard.up = true; break;
-        case 'ArrowDown': keyboard.down = true; break;
-        case 'ArrowLeft': keyboard.left = true; break;
-        case 'ArrowRight': keyboard.right = true; break;
-        case 'ShiftLeft':
-        case 'ShiftRight':
-            keyboard.shift = true; break;
-        case 'KeyF': // Press F to switch between scenes (only at bus stop)
-            // Check if player is near the bus stop (approximate position)
-            const busStopPosition = new THREE.Vector3(-15, 0, PLAZA_CONFIG.NEAR_SIDEWALK_Z); // Bus stop position
-            const playerPosition = camera.position;
-            const distanceToBusStop = playerPosition.distanceTo(busStopPosition);
-            
-            if (distanceToBusStop < 5) { // Within 5 units of bus stop
-                if (CURRENT_SCENE === 'PLAZA') {
-                    switchScene('FOREST_SUBURBAN');
-                } else {
-                    switchScene('PLAZA');
-                }
-            }
-            break;
-    }
-});
-
-document.addEventListener('keyup', (event) => {
-    switch(event.code) {
-        case 'KeyW': keyboard.w = false; break;
-        case 'KeyA': keyboard.a = false; break;
-        case 'KeyS': keyboard.s = false; break;
-        case 'KeyD': keyboard.d = false; break;
-        case 'ArrowUp': keyboard.up = false; break;
-        case 'ArrowDown': keyboard.down = false; break;
-        case 'ArrowLeft': keyboard.left = false; break;
-        case 'ArrowRight': keyboard.right = false; break;
-        case 'ShiftLeft':
-        case 'ShiftRight':
-            keyboard.shift = false; break;
-    }
-});
-
-// Mobile touch controls
-if (isMobile) {
-    // Create mobile UI elements
-    const mobileUI = document.createElement('div');
-    mobileUI.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        pointer-events: none;
-        z-index: 1000;
-        user-select: none;
-    `;
-    document.body.appendChild(mobileUI);
-
-    // Virtual joystick for movement
-    const joystick = document.createElement('div');
-    joystick.style.cssText = `
-        position: absolute;
-        bottom: 80px;
-        left: 80px;
-        width: 120px;
-        height: 120px;
-        border: 3px solid rgba(255, 255, 255, 0.3);
-        border-radius: 50%;
-        background: rgba(0, 0, 0, 0.3);
-        pointer-events: auto;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    `;
-    
-    const joystickKnob = document.createElement('div');
-    joystickKnob.style.cssText = `
-        width: 40px;
-        height: 40px;
-        background: rgba(255, 255, 255, 0.8);
-        border-radius: 50%;
-        transition: transform 0.1s ease;
-    `;
-    joystick.appendChild(joystickKnob);
-    mobileUI.appendChild(joystick);
-
-    // Look joystick for camera rotation (right side)
-    const lookJoystick = document.createElement('div');
-    lookJoystick.style.cssText = `
-        position: absolute;
-        bottom: 80px;
-        right: 80px;
-        width: 120px;
-        height: 120px;
-        border: 3px solid rgba(100, 100, 255, 0.3);
-        border-radius: 50%;
-        background: rgba(0, 0, 0, 0.3);
-        pointer-events: auto;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    `;
-    
-    const lookJoystickKnob = document.createElement('div');
-    lookJoystickKnob.style.cssText = `
-        width: 40px;
-        height: 40px;
-        background: rgba(100, 100, 255, 0.8);
-        border-radius: 50%;
-        transition: transform 0.1s ease;
-    `;
-    lookJoystick.appendChild(lookJoystickKnob);
-    mobileUI.appendChild(lookJoystick);
-
-    // Dynamic action button (Talk/Travel) - moved above look joystick
-    mobileActionButton = document.createElement('div');
-    mobileActionButton.style.cssText = `
-        position: absolute;
-        bottom: 220px;
-        right: 80px;
-        width: 80px;
-        height: 80px;
-        border: 3px solid rgba(255, 255, 255, 0.3);
-        border-radius: 50%;
-        background: rgba(0, 0, 0, 0.3);
-        pointer-events: auto;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-size: 11px;
-        text-align: center;
-        line-height: 1.2;
-        font-weight: bold;
-    `;
-    mobileActionButton.innerHTML = 'RUN';
-    mobileUI.appendChild(mobileActionButton);
-
-    // Helper function to find which control a touch belongs to
-    const findTouchTarget = (touch) => {
-        const joystickRect = joystick.getBoundingClientRect();
-        const lookJoystickRect = lookJoystick.getBoundingClientRect();
-        const actionRect = mobileActionButton.getBoundingClientRect();
-        
-        if (touch.clientX >= joystickRect.left && touch.clientX <= joystickRect.right && 
-            touch.clientY >= joystickRect.top && touch.clientY <= joystickRect.bottom) {
-            return 'joystick';
-        }
-        
-        if (touch.clientX >= lookJoystickRect.left && touch.clientX <= lookJoystickRect.right && 
-            touch.clientY >= lookJoystickRect.top && touch.clientY <= lookJoystickRect.bottom) {
-            return 'lookJoystick';
-        }
-        
-        if (touch.clientX >= actionRect.left && touch.clientX <= actionRect.right && 
-            touch.clientY >= actionRect.top && touch.clientY <= actionRect.bottom) {
-            return 'actionButton';
-        }
-        
-        return null;
-    };
-
-    // Unified touch event handlers
-    const handleTouchStart = (e) => {
-        e.preventDefault();
-        
-        for (let i = 0; i < e.touches.length; i++) {
-            const touch = e.touches[i];
-            const target = findTouchTarget(touch);
-            
-            if (target === 'joystick' && !touchControls.joystick.active) {
-                const rect = joystick.getBoundingClientRect();
-                touchControls.joystick.centerX = rect.left + rect.width / 2;
-                touchControls.joystick.centerY = rect.top + rect.height / 2;
-                touchControls.joystick.active = true;
-                touchControls.joystick.touchId = touch.identifier;
-                touchControls.joystick.x = touch.clientX - touchControls.joystick.centerX;
-                touchControls.joystick.y = touch.clientY - touchControls.joystick.centerY;
-                updateJoystickPosition();
-            }
-            else if (target === 'lookJoystick' && !touchControls.lookJoystick.active) {
-                const rect = lookJoystick.getBoundingClientRect();
-                touchControls.lookJoystick.centerX = rect.left + rect.width / 2;
-                touchControls.lookJoystick.centerY = rect.top + rect.height / 2;
-                touchControls.lookJoystick.active = true;
-                touchControls.lookJoystick.touchId = touch.identifier;
-                touchControls.lookJoystick.x = touch.clientX - touchControls.lookJoystick.centerX;
-                touchControls.lookJoystick.y = touch.clientY - touchControls.lookJoystick.centerY;
-                updateLookJoystickPosition();
-            }
-            else if (target === 'actionButton') {
-                handleActionStart(e);
-            }
-        }
-    };
-
-    const handleTouchMove = (e) => {
-        e.preventDefault();
-        
-        for (let i = 0; i < e.touches.length; i++) {
-            const touch = e.touches[i];
-            
-            // Handle movement joystick
-            if (touchControls.joystick.active && touch.identifier === touchControls.joystick.touchId) {
-                touchControls.joystick.x = touch.clientX - touchControls.joystick.centerX;
-                touchControls.joystick.y = touch.clientY - touchControls.joystick.centerY;
-                updateJoystickPosition();
-            }
-            
-            // Handle look joystick
-            if (touchControls.lookJoystick.active && touch.identifier === touchControls.lookJoystick.touchId) {
-                touchControls.lookJoystick.x = touch.clientX - touchControls.lookJoystick.centerX;
-                touchControls.lookJoystick.y = touch.clientY - touchControls.lookJoystick.centerY;
-                updateLookJoystickPosition();
-            }
-        }
-    };
-
-    const handleTouchEnd = (e) => {
-        e.preventDefault();
-        
-        for (let i = 0; i < e.changedTouches.length; i++) {
-            const touch = e.changedTouches[i];
-            
-            if (touchControls.joystick.active && touch.identifier === touchControls.joystick.touchId) {
-                touchControls.joystick.active = false;
-                touchControls.joystick.touchId = null;
-                touchControls.joystick.x = 0;
-                touchControls.joystick.y = 0;
-                joystickKnob.style.transform = 'translate(0, 0)';
-            }
-            
-            if (touchControls.lookJoystick.active && touch.identifier === touchControls.lookJoystick.touchId) {
-                touchControls.lookJoystick.active = false;
-                touchControls.lookJoystick.touchId = null;
-                touchControls.lookJoystick.x = 0;
-                touchControls.lookJoystick.y = 0;
-                lookJoystickKnob.style.transform = 'translate(0, 0)';
-            }
-        }
-        
-        // Handle action button end
-        if (e.changedTouches.length > 0) {
-            handleActionEnd(e);
-        }
-    };
-
-    const updateJoystickPosition = () => {
-        const maxDistance = 40; // Half of joystick radius
-        const distance = Math.sqrt(touchControls.joystick.x * touchControls.joystick.x + touchControls.joystick.y * touchControls.joystick.y);
-        
-        if (distance > maxDistance) {
-            const angle = Math.atan2(touchControls.joystick.y, touchControls.joystick.x);
-            touchControls.joystick.x = Math.cos(angle) * maxDistance;
-            touchControls.joystick.y = Math.sin(angle) * maxDistance;
-        }
-        
-        joystickKnob.style.transform = `translate(${touchControls.joystick.x}px, ${touchControls.joystick.y}px)`;
-    };
-
-
-    const updateLookJoystickPosition = () => {
-        const maxDistance = 40; // Half of joystick radius
-        const distance = Math.sqrt(touchControls.lookJoystick.x * touchControls.lookJoystick.x + touchControls.lookJoystick.y * touchControls.lookJoystick.y);
-        
-        if (distance > maxDistance) {
-            const angle = Math.atan2(touchControls.lookJoystick.y, touchControls.lookJoystick.x);
-            touchControls.lookJoystick.x = Math.cos(angle) * maxDistance;
-            touchControls.lookJoystick.y = Math.sin(angle) * maxDistance;
-        }
-        
-        lookJoystickKnob.style.transform = `translate(${touchControls.lookJoystick.x}px, ${touchControls.lookJoystick.y}px)`;
-    };
-
-
-    // Action button handlers
-    const handleActionStart = (e) => {
-        e.preventDefault();
-        
-        if (currentAction === 'talk') {
-            // Check if we're waiting for unlock confirmation
-            if (window.mobileWaitingForUnlockConfirm) {
-                // Handle unlock confirmation
-                endConversation();
-                // Force update nearby NPC detection
-                checkNearbyNPCs();
-                // Clear the mobile flag
-                window.mobileWaitingForUnlockConfirm = false;
-                if (nearbyNPC) {
-                    const npcName = nearbyNPC.userData.name;
-                    interactionUI.innerHTML = `
-                        <div>Near ${npcName}</div>
-                        <div style="font-size: 14px; margin-top: 5px;">Press 'E' to talk</div>
-                    `;
-                } else {
-                    interactionUI.style.display = 'none';
-                }
-                return;
-            }
-            
-            // Handle NPC conversation
-            if (hasActiveConversation()) {
-                // Check if conversation is at the end waiting for final press
-                if (conversationAtEnd) {
-                    // Final press - unlock song and end conversation
-                    console.log('Final mobile press - ending conversation...');
-                    const unlockedSong = unlockCurrentSong();
-                    if (unlockedSong) {
-                        interactionUI.innerHTML = `
-                            <div style="font-size: 14px; color: #88FF88; margin-bottom: 10px;">
-                                🎵 Unlocked: ${unlockedSong.replace(/_/g, ' ')}
-                            </div>
-                            <div style="font-size: 12px; color: #CCCCCC;">
-                                Press any key to continue...
-                            </div>
-                        `;
-                        
-                        // For mobile, we need to handle this differently
-                        // Set a flag to indicate we're waiting for unlock confirmation
-                        window.mobileWaitingForUnlockConfirm = true;
-                        
-                        setTimeout(() => {
-                            const endConversationHandler = () => {
-                                endConversation();
-                                // Force update nearby NPC detection
-                                checkNearbyNPCs();
-                                // Clear the mobile flag
-                                window.mobileWaitingForUnlockConfirm = false;
-                                if (nearbyNPC) {
-                                    const npcName = nearbyNPC.userData.name;
-                                    interactionUI.innerHTML = `
-                                        <div>Near ${npcName}</div>
-                                        <div style="font-size: 14px; margin-top: 5px;">Press 'E' to talk</div>
-                                    `;
-                                } else {
-                                    interactionUI.style.display = 'none';
-                                }
-                                document.removeEventListener('keydown', endConversationHandler);
-                            };
-                            document.addEventListener('keydown', endConversationHandler);
-                        }, 100);
-                    } else {
-                        // No unlock, just end the conversation immediately
-                        endConversation();
-                        // Force update nearby NPC detection
-                        checkNearbyNPCs();
-                        if (nearbyNPC) {
-                            const npcName = nearbyNPC.userData.name;
-                            interactionUI.innerHTML = `
-                                <div>Near ${npcName}</div>
-                                <div style="font-size: 14px; margin-top: 5px;">Press 'E' to talk</div>
-                            `;
-                        } else {
-                            interactionUI.style.display = 'none';
-                        }
-                    }
-                } else {
-                    // Continue ongoing conversation
-                    const dialogue = getCurrentDialogue();
-                    if (dialogue) {
-                        console.log('Showing dialogue:', dialogue.text);
-                        // Show current dialogue
-                        interactionUI.style.display = 'block';
-                        showDialogueStep(dialogue);
-                        
-                        // Advance to next line
-                        advanceConversation();
-                        
-                        // Check if there are more lines
-                        const nextDialogue = getCurrentDialogue();
-                        console.log('After advance, nextDialogue:', nextDialogue);
-                        if (!nextDialogue) {
-                            // No more lines, set flag to wait for final press
-                            console.log('Last line shown, waiting for final press...');
-                            setConversationAtEnd(true);
-                        }
-                    }
-                }
-            } else if (nearbyNPC) {
-                // Start new conversation
-                const success = startConversation(nearbyNPC.userData.name, CURRENT_SCENE);
-                if (success) {
-                    const dialogue = getCurrentDialogue();
-                    interactionUI.style.display = 'block';
-                    showDialogueStep(dialogue);
-                }
-            }
-        } else if (currentAction === 'travel') {
-            // Handle scene switching
-            const busStopPosition = new THREE.Vector3(-15, 0, PLAZA_CONFIG.NEAR_SIDEWALK_Z);
-            const playerPosition = camera.position;
-            const distanceToBusStop = playerPosition.distanceTo(busStopPosition);
-            
-            if (distanceToBusStop < 5) { // Within 5 units of bus stop
-                if (CURRENT_SCENE === 'PLAZA') {
-                    switchScene('FOREST_SUBURBAN');
-                } else {
-                    switchScene('PLAZA');
-                }
-            }
-        } else {
-            // Default to sprint
-            touchControls.sprint = true;
-        }
-        
-        mobileActionButton.style.background = 'rgba(255, 255, 255, 0.3)';
-    };
-
-    const handleActionEnd = (e) => {
-        e.preventDefault();
-        touchControls.sprint = false;
-        mobileActionButton.style.background = 'rgba(0, 0, 0, 0.3)';
-    };
-
-    // Add unified touch event listeners to the document
-    document.addEventListener('touchstart', handleTouchStart, { passive: false });
-    document.addEventListener('touchmove', handleTouchMove, { passive: false });
-    document.addEventListener('touchend', handleTouchEnd, { passive: false });
-    document.addEventListener('touchcancel', handleTouchEnd, { passive: false });
-}
-
-// Function to update mobile action button based on proximity
-const updateMobileActionButton = () => {
-    if (!isMobile || !mobileActionButton) return;
-    
-    const cameraPosition = camera.position;
-    let newAction = null;
-    let buttonText = 'RUN';
-    let buttonColor = 'rgba(0, 0, 0, 0.3)';
-    
-    // Check if we're waiting for unlock confirmation
-    if (window.mobileWaitingForUnlockConfirm) {
-        newAction = 'talk';
-        buttonText = 'CONTINUE';
-        buttonColor = 'rgba(255, 255, 100, 0.3)';
-    }
-    // Check for nearby NPCs
-    else if (streetElements.npcs) {
-        for (let npc of streetElements.npcs) {
-            const distance = cameraPosition.distanceTo(npc.position);
-            if (distance < 3) {
-                newAction = 'talk';
-                buttonText = 'TALK';
-                buttonColor = 'rgba(255, 100, 100, 0.3)';
-                break;
-            }
-        }
-    }
-    
-    // Check for bus stop proximity
-    if (newAction === null) {
-        const busStopPosition = new THREE.Vector3(-15, 0, PLAZA_CONFIG.NEAR_SIDEWALK_Z);
-        const distanceToBusStop = cameraPosition.distanceTo(busStopPosition);
-        
-        if (distanceToBusStop < 5) {
-            newAction = 'travel';
-            buttonText = 'TRAVEL';
-            buttonColor = 'rgba(100, 255, 100, 0.3)';
-        }
-    }
-    
-    // Update button if action changed
-    if (newAction !== currentAction) {
-        currentAction = newAction;
-        mobileActionButton.innerHTML = buttonText;
-        mobileActionButton.style.background = buttonColor;
-    }
-};
-
-// Function to update camera position based on WASD input
-const updateCameraPosition = () => {
-    // Update camera rotation based on mouse movement and look joystick
-    if (isMobile && touchControls.lookJoystick.active) {
-        // Use look joystick for camera rotation on mobile
-        // Much lower sensitivity for smoother control - normalize joystick input
-        const lookSensitivity = 0.005;
-        const normalizedX = touchControls.lookJoystick.x / 40; // Normalize to -1 to 1
-        const normalizedY = touchControls.lookJoystick.y / 40; // Normalize to -1 to 1
-        
-        yaw -= normalizedX * lookSensitivity;
-        pitch -= normalizedY * lookSensitivity;
-        
-        // Limit vertical look
-        const maxPitch = Math.PI / 3;
-        pitch = Math.max(-maxPitch, Math.min(maxPitch, pitch));
-    }
-    
-    camera.rotation.order = 'YXZ';
-    camera.rotation.y = yaw;
-    camera.rotation.x = pitch;
-    
-    // Calculate actual speed (with sprint if shift is pressed or mobile sprint button)
-    const actualSpeed = (keyboard.shift || touchControls.sprint) ? moveSpeed * sprintMultiplier : moveSpeed;
-    
-    // Get the camera's forward and right directions
-    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
-    
-    // Remove vertical component for level movement
-    forward.y = 0;
-    right.y = 0;
-    forward.normalize();
-    right.normalize();
-    
-    // Apply movement based on keys pressed (WASD, Arrow keys, and mobile joystick)
-    const moveDirection = new THREE.Vector3(0, 0, 0);
-    
-    // Forward movement (W, Up Arrow, or mobile joystick up)
-    if (keyboard.w || keyboard.up || (touchControls.joystick.active && touchControls.joystick.y < -10)) {
-        moveDirection.add(forward);
-    }
-    // Backward movement (S, Down Arrow, or mobile joystick down)
-    if (keyboard.s || keyboard.down || (touchControls.joystick.active && touchControls.joystick.y > 10)) {
-        moveDirection.sub(forward);
-    }
-    // Left movement (A, Left Arrow, or mobile joystick left)
-    if (keyboard.a || keyboard.left || (touchControls.joystick.active && touchControls.joystick.x < -10)) {
-        moveDirection.sub(right);
-    }
-    // Right movement (D, Right Arrow, or mobile joystick right)
-    if (keyboard.d || keyboard.right || (touchControls.joystick.active && touchControls.joystick.x > 10)) {
-        moveDirection.add(right);
-    }
-    
-    // Normalize and scale by speed
-    if (moveDirection.length() > 0) {
-        moveDirection.normalize().multiplyScalar(actualSpeed);
-        camera.position.add(moveDirection);
-    }
-};
-
-
-// Low resolution effect
-const pixelRatio = 0.7; // Increased from 0.5 for less blur
-
-// Create pixelated render target
-const renderTargetWidth = Math.floor(window.innerWidth * pixelRatio);
-const renderTargetHeight = Math.floor(window.innerHeight * pixelRatio);
-const renderTarget = new THREE.WebGLRenderTarget(renderTargetWidth, renderTargetHeight);
-
-// Create ping-pong render targets for feedback post-processing
-let postBufferA = new THREE.WebGLRenderTarget(renderTargetWidth, renderTargetHeight, {
-    minFilter: THREE.LinearFilter,
-    magFilter: THREE.NearestFilter,
-    format: THREE.RGBAFormat
-});
-let postBufferB = new THREE.WebGLRenderTarget(renderTargetWidth, renderTargetHeight, {
-    minFilter: THREE.LinearFilter,
-    magFilter: THREE.NearestFilter,
-    format: THREE.RGBAFormat
-});
-
-// Add a solid black plane below the road to block stars from showing through
-const createGroundPlane = () => {
-    // Create a large black plane to prevent stars from being visible through the plaza
-    const groundGeometry = new THREE.PlaneGeometry(300, 300); // Larger for plaza
-    const groundMaterial = new THREE.MeshBasicMaterial({ 
-        color: 0x000000,
-        side: THREE.DoubleSide,
-    });
-    const groundPlane = new THREE.Mesh(groundGeometry, groundMaterial);
-    groundPlane.rotation.x = Math.PI / 2; // Flat horizontal plane
-    groundPlane.position.y = -1; // Positioned below the road
-    scene.add(groundPlane);
-};
-
-// Create post-processing scene
-const postCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-const postMaterial = new THREE.ShaderMaterial({
-    vertexShader: `
-        varying vec2 vUv;
-        
-        void main() {
-            vUv = uv;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-    `,
-    fragmentShader: `
-        uniform sampler2D tDiffuse;         // Current scene render
-        uniform sampler2D tFeedback;        // Previous frame's post-processed output
-        uniform vec2 resolution;            // Resolution of the screen
-        uniform float scanlineIntensity;
-        uniform float scanlineFrequency;
-        uniform float barrelDistortion;     // For screen curvature
-        uniform float feedbackAmount;       // How much of the previous frame to blend
-        uniform bool u_applyEffects;        // Switch for effect pass vs display pass
-        uniform float toneMappingStrength;  // Strength of the tone mapping
-
-        varying vec2 vUv;
-        
-        // Barrel distortion function
-        vec2 distort(vec2 uv, float strength) {
-            vec2 cc = uv - 0.5; // Center coordinates
-            float dist = dot(cc, cc) * strength;
-            return (uv + cc * dist);
-        }
-
-        void main() {
-            if (u_applyEffects) {
-                // Apply barrel distortion for current scene lookup
-                vec2 distortedUv = distort(vUv, barrelDistortion);
-
-                vec4 currentFrameTexel = vec4(0.0);
-                // Only sample if UVs are within [0,1] range after distortion
-                if (distortedUv.x >= 0.0 && distortedUv.x <= 1.0 && distortedUv.y >= 0.0 && distortedUv.y <= 1.0) {
-                    currentFrameTexel = texture2D(tDiffuse, distortedUv);
-                }
-
-                // Feedback from previous post-processed frame (sample with non-distorted UVs)
-                vec4 feedbackTexel = texture2D(tFeedback, vUv);
-
-                // Slightly dim the current frame before blending to compensate for brightness increase
-                vec3 dimmedCurrentFrame = currentFrameTexel.rgb * 0.92; // Dim factor (0.0 to 1.0)
-                // Blend the dimmed current frame with the faded feedback
-                vec3 blendedColor = dimmedCurrentFrame + feedbackTexel.rgb * feedbackAmount;
-                
-                // Apply scanlines to the blended result (using distorted UVs for CRT consistency)
-                float scanlineEffect = sin(distortedUv.y * scanlineFrequency) * scanlineIntensity;
-                vec3 crtAffectedColor = blendedColor - scanlineEffect;
-
-                // Reinhard tone mapping to control brightness and glow
-                vec3 reinhardMapped = crtAffectedColor / (crtAffectedColor + vec3(1.0));
-
-                // Blend between original (pre-tone mapping) and tone-mapped color
-                vec3 blendedToneMappedColor = mix(crtAffectedColor, reinhardMapped, toneMappingStrength);
-                
-                // Clamp the final color to ensure it's within displayable range
-                vec3 finalColor = clamp(blendedToneMappedColor, 0.0, 1.0);
-                
-                gl_FragColor = vec4(finalColor, currentFrameTexel.a); // Use alpha from current frame
-            } else {
-                // Simple display pass: just show the input texture
-                gl_FragColor = texture2D(tDiffuse, vUv);
-            }
-        }
-    `,
-    uniforms: {
-        tDiffuse: { value: renderTarget.texture },
-        tFeedback: { value: null }, // Will be set to postBufferB.texture
-        resolution: { value: new THREE.Vector2(renderTargetWidth, renderTargetHeight) },
-        scanlineIntensity: { value: 0.03 }, // Reduced from 0.05
-        scanlineFrequency: { value: renderTargetHeight * 1.5 },
-        barrelDistortion: { value: 0.15 }, // Reduced from 0.15 for less blur
-        feedbackAmount: { value: 0.65 }, // User adjusted value
-        u_applyEffects: { value: true }, // Default to applying effects
-        toneMappingStrength: { value: 0.65 } // Default to 70% tone mapping strength
-    }
-});
-const postPlane = new THREE.PlaneGeometry(2, 2);
-const postQuad = new THREE.Mesh(postPlane, postMaterial);
-const postScene = new THREE.Scene();
-postScene.add(postQuad);
-
-// Lighting
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+const ambientLight = new THREE.AmbientLight(0xffffff, ambientIntensity);
 scene.add(ambientLight);
 
-const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-directionalLight.position.set(1, 1, 1);
+const directionalLight = new THREE.DirectionalLight(0xffffff, directionalIntensity);
+directionalLight.position.set(10, 10, 5);
 scene.add(directionalLight);
 
-// Create a glowing wireframe material
-const createGlowingWireframeMaterial = (color, opacity = 1.0, glowIntensity = 0.5) => {
-    // Create a custom shader material that adds a glow effect
-    return new THREE.ShaderMaterial({
-        uniforms: {
-            baseColor: { value: new THREE.Color(color) },
-            opacity: { value: opacity },
-            glowIntensity: { value: glowIntensity }
-        },
-        vertexShader: `
-            varying vec3 vPosition;
-            varying vec3 vNormal;
-            
-            void main() {
-                vPosition = position;
-                vNormal = normal;
-                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-            }
-        `,
-        fragmentShader: `
-            uniform vec3 baseColor;
-            uniform float opacity;
-            uniform float glowIntensity;
-            varying vec3 vPosition;
-            varying vec3 vNormal;
-            
-            void main() {
-                // Calculate wireframe effect
-                float thickness = 0.05;
-                vec3 fdx = vec3(dFdx(vPosition.x), dFdx(vPosition.y), dFdx(vPosition.z));
-                vec3 fdy = vec3(dFdy(vPosition.x), dFdy(vPosition.y), dFdy(vPosition.z));
-                vec3 normal = normalize(cross(fdx, fdy));
-                
-                // Calculate edge factor for wireframe effect
-                float edgeFactor = abs(dot(normal, normalize(vNormal)));
-                edgeFactor = step(1.0 - thickness, edgeFactor);
-                
-                // Apply color with glow
-                vec3 finalColor = baseColor * (1.0 + glowIntensity);
-                gl_FragColor = vec4(finalColor, opacity * (1.0 - edgeFactor));
-            }
-        `,
-        wireframe: true,
-        transparent: true,
-        side: THREE.DoubleSide
-    });
-};
+// =====================================================
+// HELPER FUNCTIONS FOR SCENE CREATION
+// =====================================================
 
-// Materials - now imported from utils.js
-
-// Helper function to create thick wireframes for objects
-const addThickWireframe = (mesh, color, thickness = 2) => {
-    // Create edges geometry from the original geometry
-    const edgesGeometry = new THREE.EdgesGeometry(mesh.geometry);
-    
-    // Create a line material with the given color and thickness
-    const lineMaterial = new THREE.LineBasicMaterial({ 
-        color: color,
-        linewidth: thickness // Note: linewidth has limited browser support
-    });
-    
-    // Create line segments for the edges
-    const wireframe = new THREE.LineSegments(edgesGeometry, lineMaterial);
-    
-    // Add the wireframe directly to the mesh so it moves with it
-    mesh.add(wireframe);
-    
-    return wireframe;
-};
-
-// Scene management
-const sceneGroups = {
-    exterior: new THREE.Group(),
-    interior: new THREE.Group()
-};
-
-// Add scene groups to main scene
-Object.values(sceneGroups).forEach(group => {
-    scene.add(group);
-});
-
-// Create the ground plane to block stars from being visible through the road
-createGroundPlane();
-
-// Scene state management - simplified to always be interior
-let currentScene = 'interior';
-
-// Update opacity of interior elements
-const updateInteriorOpacity = (progress) => {
-    // We don't need to modify interior opacity anymore
-    // Interior elements are always visible, but hidden by the building walls
-    // console.log(`Interior opacity updateInteriorOpacity() no longer needed`);
-};
-
-// New function to update building opacity during transition
-const updateBuildingOpacity = (progress) => {
-    // We no longer need to manipulate opacity
-    // The transition is now handled by camera movement only
-    console.log(`Camera transition progress: ${progress.toFixed(2)}`);
-};
-
-// Update exterior opacity - MODIFIED for new approach
-const updateExteriorOpacity = (progress) => {
-    // Only fade out things like streetlights, cars, etc. but not the building itself
-    sceneGroups.exterior.traverse(function(object) {
-        if (object.isMesh && object.material) {
-            // Check if the object is not one of our building walls
-            if (!streetElements.walls.includes(object)) {
-                if (!object.userData.originalOpacity) {
-                    object.userData.originalOpacity = object.material.opacity !== undefined ? object.material.opacity : 1.0;
-                }
-                
-                // Set transparent flag and update opacity
-                object.material.transparent = true;
-                object.material.opacity = progress * object.userData.originalOpacity;
-                object.material.needsUpdate = true;
-            }
-        }
-    });
-};
-
-// Create a car with the specified color and direction
-const createCar = (x, color, direction) => {
-    const carGroup = new THREE.Group();
-    
-    // Car body
-    const bodyGeometry = new THREE.BoxGeometry(2, 0.7, 1, 3, 2, 2);
-    const bodyMaterial = createWireframeMaterial(color);
-    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-    body.position.y = 0.5;
-    carGroup.add(body);
-    
-    // Car top
-    const topGeometry = new THREE.BoxGeometry(1, 0.5, 0.8, 2, 2, 2);
-    const topMaterial = createWireframeMaterial(color);
-    const top = new THREE.Mesh(topGeometry, topMaterial);
-    top.position.set(0, 1.1, 0);
-    carGroup.add(top);
-    
-    // Wheels
-    const wheelGeometry = new THREE.CylinderGeometry(0.2, 0.2, 0.1, 8, 1);
-    const wheelMaterial = createWireframeMaterial(0x111111);
-    
-    // Front-left wheel
-    const wheel1 = new THREE.Mesh(wheelGeometry, wheelMaterial);
-    wheel1.rotation.x = Math.PI / 2;
-    wheel1.position.set(-0.7, 0.2, 0.5);
-    carGroup.add(wheel1);
-    
-    // Front-right wheel
-    const wheel2 = new THREE.Mesh(wheelGeometry, wheelMaterial);
-    wheel2.rotation.x = Math.PI / 2;
-    wheel2.position.set(-0.7, 0.2, -0.5);
-    carGroup.add(wheel2);
-    
-    // Back-left wheel
-    const wheel3 = new THREE.Mesh(wheelGeometry, wheelMaterial);
-    wheel3.rotation.x = Math.PI / 2;
-    wheel3.position.set(0.7, 0.2, 0.5);
-    carGroup.add(wheel3);
-    
-    // Back-right wheel
-    const wheel4 = new THREE.Mesh(wheelGeometry, wheelMaterial);
-    wheel4.rotation.x = Math.PI / 2;
-    wheel4.position.set(0.7, 0.2, -0.5);
-    carGroup.add(wheel4);
-    
-    // Position and rotate based on direction
-    carGroup.position.set(x, 0, 0); // Z is handled by the group that contains it
-    if (direction === 'left') {
-        // Fix rotation: cars going left should point in the -x direction (looking from +z to -z)
-        carGroup.rotation.y = 0; // No rotation needed as the car model already faces the right way
-    } else {
-        // Fix rotation: cars going right should point in the +x direction (looking from +z to -z)
-        carGroup.rotation.y = Math.PI; // 180 degrees to face the opposite direction
-    }
-    
-    carGroup.userData.direction = direction; // Store direction for animation
-    
-    return carGroup;
-};
-
-// Function to get a random car color
-const getRandomCarColor = () => {
-    const carColors = [
-        0xff0000, // Red
-        0x00ff00, // Green
-        0x0000ff, // Blue
-        0xffff00, // Yellow
-        0xff00ff, // Magenta
-        0x00ffff, // Cyan
-        0xffa500, // Orange
-        0x800080, // Purple
-        0x008000, // Dark Green
-        0x000080, // Navy
-        0x808080, // Gray
-        0xffffff  // White
-    ];
-    return carColors[Math.floor(Math.random() * carColors.length)];
-};
-
-// New England Tree Species Creation
-const createTree = (x, z, scale = 1, treeType = null) => {
-    const treeGroup = new THREE.Group();
-    
-    // Define New England tree species with realistic characteristics
-    const treeTypes = {
-        'Eastern White Pine': {
-            trunkColor: 0x696969,
-            foliageColor: 0x228B22,
-            height: 8 + Math.random() * 4,
-            trunkWidth: 0.6,
-            foliageShape: 'conical',
-            foliageSize: 2.2,
-            layers: 4
-        },
-        'Red Maple': {
-            trunkColor: 0x654321,
-            foliageColor: 0x8B0000,  // Deep red for fall colors
-            height: 6 + Math.random() * 3,
-            trunkWidth: 0.5,
-            foliageShape: 'round',
-            foliageSize: 3.0,
-            layers: 2
-        },
-        'Northern Red Oak': {
-            trunkColor: 0x8B4513,
-            foliageColor: 0x2F4F2F,  // Dark green
-            height: 7 + Math.random() * 5,
-            trunkWidth: 0.8,
-            foliageShape: 'broad',
-            foliageSize: 3.5,
-            layers: 3
-        },
-        'Eastern Hemlock': {
-            trunkColor: 0x696969,
-            foliageColor: 0x006400,  // Dark forest green
-            height: 6 + Math.random() * 3,
-            trunkWidth: 0.4,
-            foliageShape: 'drooping',
-            foliageSize: 2.5,
-            layers: 5
-        },
-        'Red Pine': {
-            trunkColor: 0xA0522D,  // Reddish brown
-            foliageColor: 0x228B22,
-            height: 7 + Math.random() * 4,
-            trunkWidth: 0.5,
-            foliageShape: 'sparse',
-            foliageSize: 1.8,
-            layers: 3
-        },
-        'American Beech': {
-            trunkColor: 0xD2B48C,  // Light brown/gray
-            foliageColor: 0x32CD32,  // Bright green
-            height: 5 + Math.random() * 3,
-            trunkWidth: 0.6,
-            foliageShape: 'dense',
-            foliageSize: 2.8,
-            layers: 2
-        }
-    };
-    
-    // Select random tree type if none specified
-    const typeNames = Object.keys(treeTypes);
-    const selectedType = treeType || typeNames[Math.floor(Math.random() * typeNames.length)];
-    const tree = treeTypes[selectedType];
-    
-    // Create trunk with species-specific characteristics
-    const trunkHeight = tree.height * scale;
-    const trunkGeometry = new THREE.CylinderGeometry(
-        tree.trunkWidth * scale * 0.7, 
-        tree.trunkWidth * scale, 
-        trunkHeight, 
-        8
-    );
-    const trunkMaterial = createWireframeMaterial(tree.trunkColor);
-    const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
-    trunk.position.y = trunkHeight / 2;
-    treeGroup.add(trunk);
-    
-    // Create foliage based on tree type
-    const foliageMaterial = createWireframeMaterial(tree.foliageColor);
-    
-    switch (tree.foliageShape) {
-        case 'conical': // Pine trees
-            for (let i = 0; i < tree.layers; i++) {
-                const layerHeight = trunkHeight * 0.6 + (i * trunkHeight * 0.15);
-                const layerSize = tree.foliageSize * scale * (1 - i * 0.2);
-                const coneGeometry = new THREE.ConeGeometry(layerSize, layerSize * 0.8, 8);
-                const layer = new THREE.Mesh(coneGeometry, foliageMaterial);
-                layer.position.y = layerHeight;
-                treeGroup.add(layer);
-            }
-            break;
-            
-        case 'round': // Maple
-            for (let i = 0; i < tree.layers; i++) {
-                const sphereGeometry = new THREE.SphereGeometry(tree.foliageSize * scale + Math.random() * 0.5, 6, 6);
-                const sphere = new THREE.Mesh(sphereGeometry, foliageMaterial);
-                sphere.position.set(
-                    (Math.random() - 0.5) * scale,
-                    trunkHeight * 0.7 + Math.random() * scale,
-                    (Math.random() - 0.5) * scale
-                );
-                treeGroup.add(sphere);
-            }
-            break;
-            
-        case 'broad': // Oak
-            for (let i = 0; i < tree.layers; i++) {
-                const foliageGeometry = new THREE.SphereGeometry(tree.foliageSize * scale, 6, 6);
-                foliageGeometry.scale(1.2, 0.8, 1.2); // Flatten for broad canopy
-                const foliage = new THREE.Mesh(foliageGeometry, foliageMaterial);
-                foliage.position.set(
-                    (Math.random() - 0.5) * 2 * scale,
-                    trunkHeight * 0.8 + (Math.random() - 0.5) * scale,
-                    (Math.random() - 0.5) * 2 * scale
-                );
-                treeGroup.add(foliage);
-            }
-            break;
-            
-        case 'drooping': // Hemlock
-            for (let i = 0; i < tree.layers; i++) {
-                // Start from the top and work down
-                const layerHeight = trunkHeight * 0.95 - (i * trunkHeight * 0.15);
-                const layerSize = tree.foliageSize * scale * (0.7 + i * 0.1); // Smaller at top, larger at bottom
-                const ellipseGeometry = new THREE.SphereGeometry(layerSize, 6, 6);
-                ellipseGeometry.scale(1, 0.6, 1); // Drooping effect
-                const layer = new THREE.Mesh(ellipseGeometry, foliageMaterial);
-                layer.position.y = layerHeight;
-                treeGroup.add(layer);
-            }
-            break;
-            
-        case 'sparse': // Red Pine
-            for (let i = 0; i < tree.layers; i++) {
-                if (Math.random() > 0.2) { // Less sparse foliage
-                    const needleGeometry = new THREE.SphereGeometry(tree.foliageSize * scale, 6, 6);
-                    const needles = new THREE.Mesh(needleGeometry, foliageMaterial);
-                    needles.position.set(
-                        (Math.random() - 0.5) * 1.5 * scale,
-                        trunkHeight * 0.7 + Math.random() * trunkHeight * 0.25, // 70% to 95% coverage
-                        (Math.random() - 0.5) * 1.5 * scale
-                    );
-                    treeGroup.add(needles);
-                }
-            }
-            break;
-            
-        case 'dense': // Beech
-            for (let i = 0; i < tree.layers; i++) {
-                const denseGeometry = new THREE.SphereGeometry(tree.foliageSize * scale, 8, 8);
-                const dense = new THREE.Mesh(denseGeometry, foliageMaterial);
-                dense.position.set(
-                    (Math.random() - 0.5) * scale * 0.5,
-                    trunkHeight * 0.7 + (Math.random() - 0.5) * scale * 0.5,
-                    (Math.random() - 0.5) * scale * 0.5
-                );
-                treeGroup.add(dense);
-            }
-            break;
-    }
-    
-    treeGroup.position.set(x, 0, z);
-    treeGroup.userData.species = selectedType;
-    return treeGroup;
-};
-
-const createBush = (x, z, scale = 1) => {
-    const bushGroup = new THREE.Group();
-    
-    // Multiple small spheres for bushy look
-    const bushColors = [0x228B22, 0x32CD32, 0x90EE90];
-    for (let i = 0; i < 2 + Math.random() * 3; i++) {
-        const bushGeometry = new THREE.SphereGeometry(0.8 * scale + Math.random() * 0.4, 6, 6);
-        const bushColor = bushColors[Math.floor(Math.random() * bushColors.length)];
-        const bushMaterial = createWireframeMaterial(bushColor);
-        const bush = new THREE.Mesh(bushGeometry, bushMaterial);
-        bush.position.set(
-            (Math.random() - 0.5) * 2 * scale,
-            0.8 * scale + Math.random() * 0.5,
-            (Math.random() - 0.5) * 2 * scale
-        );
-        bushGroup.add(bush);
-    }
-    
-    bushGroup.position.set(x, 0, z);
-    return bushGroup;
-};
-
+// Forest elements for suburban scenes (with buildings, roads, etc.)
 const createForestElements = () => {
     const forestGroup = new THREE.Group();
     forestGroup.name = "Forest Elements";
@@ -1260,71 +269,33 @@ const createForestElements = () => {
     
     // Define clear zones to avoid building conflicts and road
     const buildingZones = [
-        // Front shops area
         { left: -70, right: 70, front: -10, back: 15 },
-        // Far buildings area (if any) - expanded to cover actual building positions
         { left: -70, right: 70, front: 20, back: 50 },
-        // Parking area
         { left: -50, right: 50, front: 50, back: 70 }
     ];
     
-    // Road exclusion zone (street is 300 wide, 12 deep, centered at Z=11)
-    const roadZone = {
-        left: -150,  // Half of 300
-        right: 150,  // Half of 300
-        front: 5,    // Street starts at Z=5 (11 - 6)
-        back: 17     // Street ends at Z=17 (11 + 6)
-    };
+    const roadZone = { left: -150, right: 150, front: 5, back: 17 };
+    const nearSidewalkZone = { left: -150, right: 150, front: -1, back: 5 };
+    const farSidewalkZone = { left: -150, right: 150, front: 17, back: 23 };
+    const parkZone = { left: -45, right: 45, front: -50, back: 5 };
     
-    // Sidewalk exclusion zones
-    const nearSidewalkZone = {
-        left: -150,  // Full width
-        right: 150,  // Full width
-        front: -1,   // Near sidewalk starts at Z=-1 (2 - 3)
-        back: 5      // Near sidewalk ends at Z=5 (2 + 3)
-    };
+    const isInBuildingZone = (x, z) => buildingZones.some(zone => 
+        x >= zone.left && x <= zone.right && z >= zone.front && z <= zone.back
+    );
     
-    const farSidewalkZone = {
-        left: -150,  // Full width
-        right: 150,  // Full width
-        front: 17,   // Far sidewalk starts at Z=17 (20 - 3)
-        back: 23     // Far sidewalk ends at Z=23 (20 + 3)
-    };
-    
-    const isInBuildingZone = (x, z) => {
-        return buildingZones.some(zone => 
-            x >= zone.left && x <= zone.right && 
-            z >= zone.front && z <= zone.back
-        );
-    };
-    
-    const isInRoadZone = (x, z) => {
-        return x >= roadZone.left && x <= roadZone.right && 
-               z >= roadZone.front && z <= roadZone.back;
-    };
+    const isInRoadZone = (x, z) => 
+        x >= roadZone.left && x <= roadZone.right && z >= roadZone.front && z <= roadZone.back;
     
     const isInSidewalkZone = (x, z) => {
-        // Check near sidewalk
         const inNearSidewalk = x >= nearSidewalkZone.left && x <= nearSidewalkZone.right && 
                               z >= nearSidewalkZone.front && z <= nearSidewalkZone.back;
-        // Check far sidewalk
         const inFarSidewalk = x >= farSidewalkZone.left && x <= farSidewalkZone.right && 
                              z >= farSidewalkZone.front && z <= farSidewalkZone.back;
         return inNearSidewalk || inFarSidewalk;
     };
     
-    // Park exclusion zone (gazebo, benches, and stone wall area)
-    const parkZone = {
-        left: -45,    // Park extends 45 units left and right from center (outside stone wall)
-        right: 45,
-        front: -50,   // Park extends from z=-50 (behind stone wall) to z=5 (front of park)
-        back: 5
-    };
-    
-    const isInParkZone = (x, z) => {
-        return x >= parkZone.left && x <= parkZone.right && 
-               z >= parkZone.front && z <= parkZone.back;
-    };
+    const isInParkZone = (x, z) => 
+        x >= parkZone.left && x <= parkZone.right && z >= parkZone.front && z <= parkZone.back;
     
     const selectTreeType = () => {
         const rand = Math.random() * 100;
@@ -1336,22 +307,15 @@ const createForestElements = () => {
         else return 'Red Pine';
     };
     
-    // Unified forest generation - cover entire floor area except exclusion zones
-    const forestBounds = {
-        left: -145,
-        right: 145, 
-        front: -145,
-        back: 145
-    };
+    const forestBounds = { left: -145, right: 145, front: -145, back: 145 };
     
-    // Generate trees across the entire floor area with consistent spacing
     for (let x = forestBounds.left; x <= forestBounds.right; x += 6 + Math.random() * 2) {
         for (let z = forestBounds.front; z <= forestBounds.back; z += 6 + Math.random() * 2) {
-            const treeX = x + (Math.random() - 0.5) * 2;
-            const treeZ = z + (Math.random() - 0.5) * 2;
+            const treeX = x + (Math.random() - 0.5) * 1;
+            const treeZ = z + (Math.random() - 0.5) * 1;
             
-            // Only place trees if they're not in any exclusion zone
-            if (!isInBuildingZone(treeX, treeZ) && !isInRoadZone(treeX, treeZ) && !isInSidewalkZone(treeX, treeZ) && !isInParkZone(treeX, treeZ)) {
+            if (!isInBuildingZone(treeX, treeZ) && !isInRoadZone(treeX, treeZ) && 
+                !isInSidewalkZone(treeX, treeZ) && !isInParkZone(treeX, treeZ)) {
                 const tree = createTree(treeX, treeZ, 0.6 + Math.random() * 0.4, selectTreeType());
                 forestGroup.add(tree);
                 treeCount++;
@@ -1359,7 +323,87 @@ const createForestElements = () => {
         }
     }
     
-    console.log(`🌲 Generated ${treeCount} New England trees for forest (avoiding buildings)`);
+    console.log(`🌲 Generated ${treeCount} New England trees for suburban forest`);
+    return forestGroup;
+};
+
+// Forest elements specifically for pond/camp scenes (no buildings, roads, etc.)
+const createPondForestElements = () => {
+    const forestGroup = new THREE.Group();
+    forestGroup.name = "Pond Forest Elements";
+    
+    let treeCount = 0;
+    
+    // Road and sidewalk zones (road is vertical on left side at X: -100)
+    const roadZone = { left: -156, right: 150, front: -10, back: 30 };
+    const nearSidewalkZone = { left: -94, right: -88, front: -150, back: 150 };
+    const farSidewalkZone = { left: -112, right: -106, front: -150, back: 150 };
+    
+    const isInRoadZone = (x, z) => 
+        x >= roadZone.left && x <= roadZone.right && z >= roadZone.front && z <= roadZone.back;
+    
+    const isInSidewalkZone = (x, z) => {
+        const inNearSidewalk = x >= nearSidewalkZone.left && x <= nearSidewalkZone.right && 
+                              z >= nearSidewalkZone.front && z <= nearSidewalkZone.back;
+        const inFarSidewalk = x >= farSidewalkZone.left && x <= farSidewalkZone.right && 
+                             z >= farSidewalkZone.front && z <= farSidewalkZone.back;
+        return inNearSidewalk || inFarSidewalk;
+    };
+    
+    // Pond area clearing (back area) - around Z: 150, with buffer for random tree offset
+    // Pond group at (0, 0, 150) with organic shape extending to X: -35 to 35, Z: 115 to 185
+    // Main pond radius 18 * 1.2 = 21.6, plus jutting sections, plus buffer for random tree offset
+    const pondZone = { left: -37, right: 37, front: 75, back: 125 };
+    const isInPondZone = (x, z) => 
+        x >= pondZone.left && x <= pondZone.right && z >= pondZone.front && z <= pondZone.back;
+    
+    // Campsite clearing (front area) - around Z: -20, with buffer for random tree offset
+    // Campfire group at (50, 0, -20) with objects extending X: 35 to 70, Z: -40 to 0
+    // Add buffer of 5 units to account for random tree placement offset and object spread
+    const campsiteZone = { left: 20, right: 75, front: -100, back: -25 };
+    const isInCampsiteZone = (x, z) => 
+        x >= campsiteZone.left && x <= campsiteZone.right && z >= campsiteZone.front && z <= campsiteZone.back;
+    
+    // Path clearings - precise based on actual path positions
+    // Left path: X: -20 to 0, Z: 0 to 150 (leads to pond) - wider path
+    const leftPathZone = { left: -8, right: 8, front: 0, back: 125 };
+    const isInLeftPathZone = (x, z) => 
+        x >= leftPathZone.left && x <= leftPathZone.right && z >= leftPathZone.front && z <= leftPathZone.back;
+    
+    // Right path: X: 20 to 50, Z: 0 to -20 (leads to campfire) - wider path
+    const rightPathZone = { left: 12, right: 58, front: -20, back: 0 };
+    const isInRightPathZone = (x, z) => 
+        x >= rightPathZone.left && x <= rightPathZone.right && z >= rightPathZone.front && z <= rightPathZone.back;
+    
+    const selectTreeType = () => {
+        const rand = Math.random() * 100;
+        if (rand < 25) return 'Eastern White Pine';
+        else if (rand < 45) return 'Red Maple';
+        else if (rand < 65) return 'Northern Red Oak';
+        else if (rand < 80) return 'Eastern Hemlock';
+        else if (rand < 92) return 'American Beech';
+        else return 'Red Pine';
+    };
+    
+    const forestBounds = { left: -145, right: 145, front: -145, back: 145 };
+    
+    for (let x = forestBounds.left; x <= forestBounds.right; x += 3 + Math.random() * 2) {
+        for (let z = forestBounds.front; z <= forestBounds.back; z += 6 + Math.random() * 2) {
+            const treeX = x + (Math.random() - 0.5) * 1;
+            const treeZ = z + (Math.random() - 0.5) * 1;
+            
+            // Check pond-specific zones plus road and sidewalk zones
+            if (!isInPondZone(treeX, treeZ) && !isInCampsiteZone(treeX, treeZ) &&
+                !isInLeftPathZone(treeX, treeZ) && !isInRightPathZone(treeX, treeZ) &&
+                !isInRoadZone(treeX, treeZ) && !isInSidewalkZone(treeX, treeZ)) {
+                const tree = createTree(treeX, treeZ, 0.6 + Math.random() * 0.4, selectTreeType());
+                forestGroup.add(tree);
+                treeCount++;
+            }
+        }
+    }
+    
+    console.log(`🌲 Generated ${treeCount} New England trees for pond forest`);
     return forestGroup;
 };
 
@@ -1367,31 +411,26 @@ const createStoneWall = () => {
     const wallGroup = new THREE.Group();
     wallGroup.name = "New England Stone Wall";
     
-    // Create classic New England stone wall along the road edge
-    const wallLength = 160; // Total length
+    const wallLength = 160;
     const stoneSize = 0.8;
     const wallHeight = 1.2;
     
     for (let x = -80; x <= 80; x += stoneSize + Math.random() * 0.3) {
-        // No gaps - continuous stone wall across the whole length
-        
-        // Create wall segment with stacked stones
         for (let y = 0; y < wallHeight; y += stoneSize * 0.7) {
             const stoneGeometry = new THREE.BoxGeometry(
                 stoneSize + Math.random() * 0.4,
                 stoneSize * 0.6 + Math.random() * 0.2,
                 stoneSize * 0.8 + Math.random() * 0.3
             );
-            const stoneMaterial = createWireframeMaterial(0x696969); // Gray stone
+            const stoneMaterial = createWireframeMaterial(0x696969);
             const stone = new THREE.Mesh(stoneGeometry, stoneMaterial);
             
             stone.position.set(
                 x + (Math.random() - 0.5) * 0.3,
                 y + stoneSize * 0.3,
-                (PLAZA_CONFIG.FAR_SIDEWALK_Z + PLAZA_CONFIG.FAR_BUILDINGS_Z) / 2 + (Math.random() - 0.5) * 0.4 // Between far sidewalk and far buildings
+                (PLAZA_CONFIG.FAR_SIDEWALK_Z + PLAZA_CONFIG.FAR_BUILDINGS_Z) / 2 + (Math.random() - 0.5) * 0.4
             );
             
-            // Slight rotation for natural look
             stone.rotation.y = (Math.random() - 0.5) * 0.3;
             wallGroup.add(stone);
         }
@@ -1405,44 +444,38 @@ const createSuburbanElements = () => {
     const suburbanGroup = new THREE.Group();
     suburbanGroup.name = "Suburban Elements";
     
-    // Add stone wall if enabled
-    if (PLAZA_CONFIG.STONE_WALL) {
-        const stoneWall = createStoneWall();
-        suburbanGroup.add(stoneWall);
+    // Add scattered mailboxes
+    for (let i = 0; i < 5; i++) {
+        const x = -60 + Math.random() * 120;
+        const z = 25 + Math.random() * 20;
+        
+        const mailboxGroup = new THREE.Group();
+        const postGeometry = new THREE.CylinderGeometry(0.1, 0.1, 1.2, 6);
+        const postMaterial = createWireframeMaterial(0x8B4513);
+        const post = new THREE.Mesh(postGeometry, postMaterial);
+        post.position.y = 0.6;
+        mailboxGroup.add(post);
+        
+        const boxGeometry = new THREE.BoxGeometry(0.6, 0.4, 0.3);
+        const boxMaterial = createWireframeMaterial(0x000000);
+        const box = new THREE.Mesh(boxGeometry, boxMaterial);
+        box.position.y = 1.2;
+        mailboxGroup.add(box);
+        
+        mailboxGroup.position.set(x, 0, z);
+        suburbanGroup.add(mailboxGroup);
     }
     
-    // Scattered bushes and small trees in open areas (fewer for park feel)
-    for (let i = 0; i < 12; i++) {
-        const x = -80 + Math.random() * 160;
-        const z = -15 + Math.random() * 40;
-        
-        // Avoid placing too close to main structures, stone wall, road, and sidewalks
-        if (Math.abs(x) < 75 && z > -10 && z < 25) continue;
-        
-        // Check if in road or sidewalk zones
-        const inRoad = x >= -150 && x <= 150 && z >= 5 && z <= 17;
-        const inNearSidewalk = x >= -150 && x <= 150 && z >= -1 && z <= 5;
-        const inFarSidewalk = x >= -150 && x <= 150 && z >= 17 && z <= 23;
-        
-        if (inRoad || inNearSidewalk || inFarSidewalk) continue;
-        
-        if (Math.random() > 0.7) {
-            const tree = createTree(x, z, 0.4 + Math.random() * 0.3);
-            suburbanGroup.add(tree);
-        } else {
-            const bush = createBush(x, z, 0.6 + Math.random() * 0.3);
-            suburbanGroup.add(bush);
-        }
-    }
-    
-    // Mailboxes removed - were in random positions instead of in front of houses
-    
+    console.log("🏘️ Created suburban elements");
     return suburbanGroup;
 };
 
-// NPCs are now created in npcs.js
+// =====================================================
+// CREATE STREET SCENE
+// =====================================================
+// NOTE: This function is kept here temporarily. It's ~2000 lines and should
+// eventually be moved to scenes.js for better organization.
 
-// Street scene
 const createStreetScene = () => {
     const streetElements = {};
     
@@ -1494,7 +527,7 @@ const createStreetScene = () => {
     const street = new THREE.Mesh(streetGeometry, streetMaterial);
     street.rotation.x = -Math.PI / 2;
     street.position.set(0, -0.1, PLAZA_CONFIG.STREET_Z);
-    sceneGroups.exterior.add(street);
+    scene.add(street);
     streetElements.street = street;
     
     // Near sidewalk (where shops are) - extended to match floor
@@ -1503,7 +536,7 @@ const createStreetScene = () => {
     const nearSidewalk = new THREE.Mesh(nearSidewalkGeometry, sidewalkMaterial);
     nearSidewalk.rotation.x = -Math.PI / 2;
     nearSidewalk.position.set(0, -0.09, PLAZA_CONFIG.NEAR_SIDEWALK_Z);
-    sceneGroups.exterior.add(nearSidewalk);
+    scene.add(nearSidewalk);
     streetElements.nearSidewalk = nearSidewalk;
     
     // Far sidewalk - extended to match floor
@@ -1511,17 +544,17 @@ const createStreetScene = () => {
     const farSidewalk = new THREE.Mesh(farSidewalkGeometry, sidewalkMaterial);
     farSidewalk.rotation.x = -Math.PI / 2;
     farSidewalk.position.set(0, -0.09, PLAZA_CONFIG.FAR_SIDEWALK_Z);
-    sceneGroups.exterior.add(farSidewalk);
+    scene.add(farSidewalk);
     streetElements.farSidewalk = farSidewalk;
     
-    // Back parking lot - only for city scene (not forest scene)
-    if (!PLAZA_CONFIG.FRONT_IS_PARK) {
+    // Back parking lot - only for city scene (not forest or pond scene)
+    if (!PLAZA_CONFIG.FRONT_IS_PARK && !PLAZA_CONFIG.FRONT_IS_POND) {
         const parkingGeometry = new THREE.PlaneGeometry(300, 60, 20, 6);
         const parkingMaterial = new THREE.MeshBasicMaterial({ color: 0x555555 }); // Parking lot color - solid material
         const parkingLot = new THREE.Mesh(parkingGeometry, parkingMaterial);
         parkingLot.rotation.x = -Math.PI / 2;
         parkingLot.position.set(0, -0.08, PLAZA_CONFIG.PARKING_LOT_Z);
-        sceneGroups.exterior.add(parkingLot);
+        scene.add(parkingLot);
         streetElements.parkingLot = parkingLot;
         
         // Parking space lines for the back parking lot
@@ -1861,8 +894,8 @@ const createStreetScene = () => {
         return busStopGroup;
     };
 
-    // Only create karaoke bar and shops for PLAZA scene, not for park scene
-    if (!PLAZA_CONFIG.FRONT_IS_PARK) {
+    // Only create karaoke bar and shops for PLAZA scene
+    if (!PLAZA_CONFIG.FRONT_IS_PARK && !PLAZA_CONFIG.FRONT_IS_POND) {
     // Karaoke Bar Building - created as a separate structure
     const buildingGroup = new THREE.Group();
     
@@ -2514,7 +1547,7 @@ const createStreetScene = () => {
         
         // Position this void at the door's center
         completeVoid.position.set(0, doorHeight/2, 0);
-        sceneGroups.exterior.add(completeVoid);
+        scene.add(completeVoid);
         
         // Add one more void directly to the scene for absolute certainty
         const finalVoid = new THREE.Mesh(
@@ -2570,7 +1603,7 @@ const createStreetScene = () => {
                 roofColor = 0x333333; // Dark roof
                 break;
             case 'convenience':
-                baseColor = 0xFF4444; // Red for Cumby's
+                baseColor = 0xFF4444; // Red for Grumby's
                 windowColor = 0xFFFFFF; // White
                 roofColor = 0x333333; // Dark roof
                 break;
@@ -2590,7 +1623,7 @@ const createStreetScene = () => {
                 roofColor = 0x333333; // Dark roof
                 break;
             case 'coffee':
-                baseColor = 0xFF6600; // Orange for Dunkin
+                baseColor = 0xFF6600; // Orange for Donut Galaxy
                 windowColor = 0xFFFFFF; // White
                 roofColor = 0x663300; // Brown roof
                 break;
@@ -3150,13 +2183,18 @@ const createStreetScene = () => {
     const shopHeight = PLAZA_CONFIG.SHOP_HEIGHT; // Standard shop height
     const shopGap = 1; // Small gap between shops
     
+    // Initialize building portals array if it doesn't exist
+    if (!streetElements.buildingPortals) {
+        streetElements.buildingPortals = [];
+    }
+    
     // Define our 6 specific shops with their characteristics
     const plazaShops = [
-        { name: 'Cumby\'s', width: 18, style: 'convenience', signColor: 0xFFFFFF },
+        { name: 'Grumby\'s', width: 18, style: 'convenience', signColor: 0xFFFFFF },
         { name: 'Grohos', width: 16, style: 'pizza', signColor: 0xFFFFFF },
         { name: 'Clothing Store', width: 14, style: 'clothing', signColor: 0xFFFFFF },
         { name: 'Dry Cleaners', width: 12, style: 'drycleaner', signColor: 0x000000 },
-        { name: 'Dunkin', width: 15, style: 'coffee', signColor: 0xFFFFFF },
+        { name: 'Donut Galaxy', width: 15, style: 'coffee', signColor: 0xFFFFFF },
         { name: 'Flower Shop', width: 13, style: 'flowers', signColor: 0x000000 }
     ];
     
@@ -3171,6 +2209,8 @@ const createStreetScene = () => {
         
         // Create building at X position (Z=0 since it's in frontShopsGroup which handles Z)
         const building = createBuildingFacade(currentX, 0, shop.width, shopHeight, facadeDepth, shop.style);
+        building.userData.buildingName = shop.name;
+        building.userData.buildingStyle = shop.style;
         
         // Add shop sign (positioned relative to the group)
         const signGeometry = new THREE.PlaneGeometry(shop.width * 0.8, 1, 4, 1);
@@ -3181,6 +2221,23 @@ const createStreetScene = () => {
         
         // Add shop name to streetElements for future reference
         streetElements[`${shop.name.replace(/[^a-zA-Z]/g, '').toLowerCase()}Shop`] = building;
+        
+        // Store door position for portal system
+        // Door is at the center of the building (x=currentX relative to group, but absolute in world)
+        // Building is at FRONT_SHOPS_Z (the frontShopsGroup handles Z positioning)
+        // The door is at the center front of the building
+        // Player approaches from the front (positive Z direction), so portal should be at the building front
+        const doorWorldX = currentX;
+        const doorWorldZ = PLAZA_CONFIG.FRONT_SHOPS_Z; // At the building front face
+        
+        streetElements.buildingPortals.push({
+            building: building,
+            position: new THREE.Vector3(doorWorldX, 0, doorWorldZ),
+            name: shop.name,
+            style: shop.style
+        });
+        
+        console.log(`🏪 Added portal for ${shop.name} at (${doorWorldX.toFixed(1)}, ${doorWorldZ.toFixed(1)})`);
         
         frontShopsGroup.add(building); // Add to front shops group instead of scene
         currentX += shop.width + shopGap;
@@ -3483,14 +2540,18 @@ const createStreetScene = () => {
     streetElements.bus = bus;
     
     // Add a bus stop to the near sidewalk group
-    const busStop = createBusStop(-15); // On the near sidewalk
-    busStop.rotation.y = 0; // Face away from the street
+    // Bus stop positioning (adjust for POND scene)
+    const busStopX = PLAZA_CONFIG.ROAD_POSITION_X ? PLAZA_CONFIG.ROAD_POSITION_X + 3 : -15;
+    const busStop = createBusStop(busStopX);
+    busStop.rotation.y = PLAZA_CONFIG.ROAD_POSITION_X ? 0 : 0; // Rotate if on side (90 degrees clockwise)
     nearSidewalkElementsGroup.add(busStop);
     streetElements.busStop = busStop;
     
     // Add forest elements if enabled for this scene
     if (PLAZA_CONFIG.FOREST_ELEMENTS) {
-        const forestElements = createForestElements();
+        // Use pond-specific forest function for POND scene, regular forest for others
+        const forestElements = PLAZA_CONFIG.FRONT_IS_POND ? 
+            createPondForestElements() : createForestElements();
         scene.add(forestElements);
         streetElements.forestElements = forestElements;
         console.log("Added forest elements to scene");
@@ -3504,13 +2565,21 @@ const createStreetScene = () => {
         console.log("Added suburban elements to scene");
     }
     
-    // Conditional front area creation - park vs karaoke bar/shops
+    // Conditional front area creation - park vs pond vs karaoke bar/shops
     if (PLAZA_CONFIG.FRONT_IS_PARK) {
         // Create park elements for forest suburban scene
         const parkElements = createParkElements(frontShopsGroup);
         streetElements.parkElements = parkElements;
         console.log("🌳 Created park for forest suburban scene");
-        } else {
+    } else if (PLAZA_CONFIG.FRONT_IS_POND) {
+        // Create pond elements for pond scene
+        const pondElements = createPondElements(frontShopsGroup, PLAZA_CONFIG, scene);
+        streetElements.pondElements = pondElements;
+        streetElements.campsiteObjects = pondElements.campsiteObjects;
+        streetElements.campfire = pondElements.campfire; // Add campfire for animation system
+        streetElements.pond = pondElements.pond; // Add pond for animation system
+        console.log("🏕️ Created pond scene with post-party campfire vibes");
+    } else {
         // Create karaoke bar and shops for plaza scene
         console.log("🎤 Creating karaoke bar and shops for plaza scene");
         // The karaoke bar creation is currently happening earlier in the function
@@ -3520,1124 +2589,390 @@ const createStreetScene = () => {
     // Define facade depth for buildings (needed for both scenes)
     const facadeDepth = 15; // Standard building depth
     
-    // Create far buildings (available for both scenes)
-    // Buildings on the far side, using a consistent approach across the entire street width
-    // Define the total street coverage range
-    const streetLeftEdge = -40;
-    const streetRightEdge = 40;
-    const streetWidth = streetRightEdge - streetLeftEdge;
-    
-    // Create buildings based on scene type
-    let numFarBuildings, buildingStyles;
-    
-    if (PLAZA_CONFIG.FEWER_BUILDINGS) {
-        // Park-like New England setting - fewer, specific building types based on Groton, MA
-        numFarBuildings = 3 + Math.floor(Math.random() * 2); // 3-4 buildings only
-        buildingStyles = ['groton_church', 'groton_townhall', 'groton_colonial', 'graveyard']; // Authentic Groton buildings
-        console.log("🏘️ Creating Groton, MA style buildings for forest scene");
+    // Create far buildings (only for PLAZA and FOREST_SUBURBAN scenes, not POND)
+    if (!PLAZA_CONFIG.FRONT_IS_POND) {
+        // Buildings on the far side, using a consistent approach across the entire street width
+        // Define the total street coverage range
+        const streetLeftEdge = -40;
+        const streetRightEdge = 40;
+        const streetWidth = streetRightEdge - streetLeftEdge;
+        
+        // Create buildings based on scene type
+        let buildings;
+        
+        if (PLAZA_CONFIG.FEWER_BUILDINGS) {
+            // Park-like New England setting - specific buildings at fixed positions
+            console.log("🏘️ Creating specific Groton, MA style buildings for forest scene");
+            
+            // Define specific buildings with fixed positions, sizes, and styles
+            buildings = [
+                { x: -25, width: 12, height: 7, style: 'groton_church', name: 'First Parish Church' },
+                { x: -8, width: 10, height: 6, style: 'groton_townhall', name: 'Town Hall' },
+                { x: 8, width: 11, height: 6.5, style: 'groton_colonial', name: 'Colonial House' },
+                { x: 25, width: 10, height: 5.5, style: 'graveyard', name: 'Graveyard' }
+            ];
+        } else {
+            // Original urban setting - specific buildings at fixed positions
+            buildings = [
+                { x: -30, width: 10, height: 7, style: 'modern', name: 'Modern Building' },
+                { x: -15, width: 9, height: 6.5, style: 'brick', name: 'Brick Building' },
+                { x: 0, width: 11, height: 7.5, style: 'hospital', name: 'Hospital' },
+                { x: 15, width: 10, height: 6, style: 'industrial', name: 'Industrial Building' },
+                { x: 30, width: 9, height: 6.5, style: 'shop', name: 'Shop Building' }
+            ];
+        }
+        
+        // Initialize building portals array if it doesn't exist (front shops may have already created it)
+        if (!streetElements.buildingPortals) {
+            streetElements.buildingPortals = [];
+        }
+        
+        // Loop through and create specific buildings
+        buildings.forEach((buildingConfig) => {
+            const { x, width, height, style, name } = buildingConfig;
+            
+            // Create the building with the proper facadeDepth
+            const building = createBuildingFacade(
+                width, height, facadeDepth, 
+                style
+            );
+            building.position.set(x, 0, 0); // Z position handled by farBuildingsGroup
+            building.rotation.y = Math.PI; // Face toward the front shops
+            building.userData.buildingName = name;
+            building.userData.buildingStyle = style;
+            
+            // Store door position for portal system
+            // Door is at the center of the building (x=0 relative to building)
+            // Building is at FAR_BUILDINGS_Z, rotated to face forward
+            const doorWorldX = x;
+            const doorWorldZ = PLAZA_CONFIG.FAR_BUILDINGS_Z;
+            
+            streetElements.buildingPortals.push({
+                building: building,
+                position: new THREE.Vector3(doorWorldX, 0, doorWorldZ),
+                name: name,
+                style: style
+            });
+            
+            farBuildingsGroup.add(building); // Add to far buildings group instead of scene
+        });
     } else {
-        // Original urban setting
-        numFarBuildings = 4 + Math.floor(Math.random() * 2); // 4-5 buildings
-        buildingStyles = ['modern', 'brick', 'shop', 'industrial', 'hospital', 'graveyard'];
-    }
-    
-    const avgBuildingWidth = streetWidth / Math.max(numFarBuildings, 4); // Ensure reasonable spacing
-    
-    // Track previous building type to avoid duplicates
-    let previousBuildingStyle = null;
-    
-    // Loop through and create buildings with predictable placement
-    for (let i = 0; i < numFarBuildings; i++) {
-        // Calculate a reasonable width that won't cause overlap
-        const buildingGap = PLAZA_CONFIG.FEWER_BUILDINGS ? 3 : 2; // More space in both settings
-        const maxWidth = avgBuildingWidth - buildingGap;
-        const width = 8 + Math.random() * Math.min(6, maxWidth - 6); // Reasonable building sizes to prevent overlap
-        
-        // Building position across the street
-        const x = streetLeftEdge + (i * avgBuildingWidth) + (avgBuildingWidth / 2);
-        
-        // Randomize other properties with minimum height to prevent "smushed" buildings
-        const height = PLAZA_CONFIG.FEWER_BUILDINGS ? 
-            5 + Math.random() * 4 : // Taller, more substantial buildings
-            Math.max(6, 4 + Math.random() * 3); // Minimum 6 units tall for city buildings
-        
-        // Choose building style - avoid consecutive duplicates
-        let buildingStyle;
-        do {
-            buildingStyle = buildingStyles[Math.floor(Math.random() * buildingStyles.length)];
-        } while (buildingStyle === previousBuildingStyle && buildingStyles.length > 1);
-        previousBuildingStyle = buildingStyle;
-        
-        // Create the building with the proper facadeDepth
-        const building = createBuildingFacade(
-            width, height, facadeDepth, 
-            buildingStyle
-        );
-        building.position.set(x, 0, 0); // Z position handled by farBuildingsGroup
-        building.rotation.y = Math.PI; // Face toward the front shops
-        
-        // Add small random offset to avoid perfect alignment
-        building.position.z += Math.random() * 2 - 1; // +/- 1 unit random z variation
-        
-        farBuildingsGroup.add(building); // Add to far buildings group instead of scene
+        console.log("🏕️ Skipped far buildings creation for pond scene");
     }
 
     // Add NPCs to the scene
     streetElements.npcs = createNPCs(PLAZA_CONFIG, CURRENT_SCENE, scene);
     
+    console.log("🏁 createStreetScene complete. Returning:", Object.keys(streetElements));
     return streetElements;
 };
 
-// Create the interior bar scene with adjusted positioning
-const createInteriorScene = (frontShopsGroup) => {
-    const interiorElements = {};
+// =====================================================
+// INITIALIZE SCENE
+// =====================================================
+let streetElements = {};
+let interiorElements = {};
+
+// Check if we're in an interior scene
+if (PLAZA_CONFIG.IS_INTERIOR) {
+    // Create interior scene based on interior type
+    console.log(`🏪 Creating interior scene: ${PLAZA_CONFIG.name}`);
     
-    // Building dimensions are larger now: 20x5x15
+    let interiorGroup;
+    let interiorDimensions = { width: 0, depth: 0 };
     
-    // Bar counter - rotated to be along the left wall with prominent wireframe
-    const barGeometry = new THREE.BoxGeometry(10, 1, 1.5, 2, 1, 1); // Very few segments for thicker wireframe
-    const barMaterial = createWireframeMaterial(0xDA8A67); // Brighter brown/orange
-    barMaterial.wireframeLinewidth = 2; // Note: This has limited effect in WebGL
-    const barCounter = new THREE.Mesh(barGeometry, barMaterial);
-    
-    // Rotate to align with left wall and position appropriately
-    barCounter.rotation.y = Math.PI / 2; // Rotate 90 degrees so length runs along z-axis
-    barCounter.position.set(-8, 1, -7.5); // Position along left wall, centered in depth
-    barCounter.scale.set(1.02, 1.02, 1.02); // Slightly larger to emphasize
-    
-    frontShopsGroup.add(barCounter); // Add to front shops group to move with building
-    interiorElements.barCounter = barCounter;
-    
-    // Bar stools - repositioned to be in front of the rotated bar
-    const createBarStool = (z) => {
-        const stoolGroup = new THREE.Group();
-        
-        // Stool seat with enhanced visibility
-        const seatGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.1, 8, 1);
-        const seatMaterial = createGlowingWireframeMaterial(0x88CCFF, 1.0, 0.3); // Light blue glow
-        const seat = new THREE.Mesh(seatGeometry, seatMaterial);
-        seat.position.y = 1;
-        stoolGroup.add(seat);
-        
-        // Stool leg
-        const legGeometry = new THREE.CylinderGeometry(0.1, 0.1, 1, 4, 1);
-        const legMaterial = createWireframeMaterial(0x555555);
-        const leg = new THREE.Mesh(legGeometry, legMaterial);
-        leg.position.y = 0.5;
-        stoolGroup.add(leg);
-        
-        // Position stool in front of bar along z-axis
-        stoolGroup.position.set(-6.6, 0, z);
-        frontShopsGroup.add(stoolGroup); // Add to front shops group to move with building
-        return stoolGroup;
-    };
-    
-    // Add bar stools along the bar
-    interiorElements.barStools = [
-        createBarStool(-4),
-        createBarStool(-6),
-        createBarStool(-8),
-        createBarStool(-10),
-        createBarStool(-12)
-    ];
-    
-    // Create a diner booth (seat + backrest + table)
-    const createDinerBooth = (x, z) => {
-        const boothGroup = new THREE.Group();
-        
-        // Booth seat
-        const seatGeometry = new THREE.BoxGeometry(2.2, 0.6, 0.8, 3, 2, 2);
-        const seatMaterial = createGlowingWireframeMaterial(0xFF6666, 1.0, 0.4); // Brighter red with glow
-        const seat = new THREE.Mesh(seatGeometry, seatMaterial);
-        seat.position.set(0, 0.3, 0);
-        boothGroup.add(seat);
-        
-        // Booth backrest
-        const backrestGeometry = new THREE.BoxGeometry(2.2, 0.8, 0.2, 3, 2, 1);
-        const backrestMaterial = createGlowingWireframeMaterial(0xFF6666, 1.0, 0.4); // Matching red
-        const backrest = new THREE.Mesh(backrestGeometry, backrestMaterial);
-        backrest.position.set(0, 0.9, -0.4);
-        boothGroup.add(backrest);
-        
-        // Booth table
-        const tableGeometry = new THREE.BoxGeometry(2, 0.1, 0.8, 3, 1, 2);
-        const tableMaterial = createGlowingWireframeMaterial(0xFFAA44, 1.0, 0.3); // Warm orange
-        const table = new THREE.Mesh(tableGeometry, tableMaterial);
-        table.position.set(0, 0.65, 0.8); // Positioned in front of the seat
-        boothGroup.add(table);
-        
-        // Table legs
-        const legGeometry = new THREE.BoxGeometry(0.08, 0.8, 0.08, 1, 1, 1);
-        const legMaterial = createWireframeMaterial(0x8B4513);
-        
-        // Add four legs to the table
-        const frontLeftLeg = new THREE.Mesh(legGeometry, legMaterial);
-        frontLeftLeg.position.set(0.85, 0.3, 1.1);
-        boothGroup.add(frontLeftLeg);
-        
-        const frontRightLeg = new THREE.Mesh(legGeometry, legMaterial);
-        frontRightLeg.position.set(-0.85, 0.3, 1.1);
-        boothGroup.add(frontRightLeg);
-        
-        const backLeftLeg = new THREE.Mesh(legGeometry, legMaterial);
-        backLeftLeg.position.set(0.85, 0.3, 0.5);
-        boothGroup.add(backLeftLeg);
-        
-        const backRightLeg = new THREE.Mesh(legGeometry, legMaterial);
-        backRightLeg.position.set(-0.85, 0.3, 0.5);
-        boothGroup.add(backRightLeg);
-        
-        // Optional details - condiment tray
-        const condimentTrayGeometry = new THREE.BoxGeometry(0.3, 0.05, 0.3, 1, 1, 1);
-        const condimentTrayMaterial = createWireframeMaterial(0x666666);
-        const condimentTray = new THREE.Mesh(condimentTrayGeometry, condimentTrayMaterial);
-        condimentTray.position.set(0.7, 0.8, 0.8);
-        boothGroup.add(condimentTray);
-        
-        // Salt and pepper shakers
-        const shakerGeometry = new THREE.CylinderGeometry(0.04, 0.04, 0.1, 6, 1);
-        const saltMaterial = createWireframeMaterial(0xFFFFFF);
-        const pepperMaterial = createWireframeMaterial(0x222222);
-        
-        const saltShaker = new THREE.Mesh(shakerGeometry, saltMaterial);
-        saltShaker.position.set(0.65, 0.87, 0.75);
-        boothGroup.add(saltShaker);
-        
-        const pepperShaker = new THREE.Mesh(shakerGeometry, pepperMaterial);
-        pepperShaker.position.set(0.75, 0.87, 0.85);
-        boothGroup.add(pepperShaker);
-        
-        // Position the entire booth
-        boothGroup.position.set(x, 0, z);
-        frontShopsGroup.add(boothGroup); // Add to front shops group to move with building
-        return boothGroup;
-    };
-    
-    // Create the opposite bench with backrest on the other side
-    const createOppositeBench = (x, z) => {
-        const boothGroup = new THREE.Group();
-        
-        // Booth seat
-        const seatGeometry = new THREE.BoxGeometry(2.2, 0.6, 0.8, 3, 2, 2);
-        const seatMaterial = createGlowingWireframeMaterial(0xFF6666, 1.0, 0.4); // Brighter red with glow
-        const seat = new THREE.Mesh(seatGeometry, seatMaterial);
-        seat.position.set(0, 0.3, -0.7);
-        boothGroup.add(seat);
-        
-        // Booth backrest on the opposite side
-        const backrestGeometry = new THREE.BoxGeometry(2.2, 0.8, 0.2, 3, 2, 1);
-        const backrestMaterial = createGlowingWireframeMaterial(0xFF6666, 1.0, 0.4); // Matching red
-        const backrest = new THREE.Mesh(backrestGeometry, backrestMaterial);
-        // This is the key change - backrest is on the opposite side
-        backrest.position.set(0, 0.9, -1.0); // Backrest faces the opposite direction
-        boothGroup.add(backrest);
-        
-        // Position the entire booth
-        boothGroup.position.set(x, 0, z);
-        frontShopsGroup.add(boothGroup); // Add to front shops group to move with building
-        return boothGroup;
-    };
-    
-    // Create a row of booth pairs along the right wall
-    interiorElements.dinerBooths = [];
-    
-    // Spacing for the booths
-    const boothSpacing = 2.9;
-    const rightWallX = 9.2; // Position along right wall, moved closer to wall
-    const startZ = -2; // Start near the front of the bar
-    
-    // Create 5 booth pairs along the wall
-    for (let i = 0; i < 5; i++) {
-        const z = startZ - (i * boothSpacing);
-        
-        // First booth - right side against wall
-        const firstBooth = createDinerBooth(rightWallX - 0.8, z - 0.5);
-        firstBooth.rotation.y = 0; // No rotation - right side against wall
-        
-        // Second booth - back-to-back with first booth
-        const secondBooth = createOppositeBench(rightWallX - 0.8, z + 0.5);
-        secondBooth.rotation.y = Math.PI; // 180 degrees - back to back with first booth
-        
-        // Track these booths
-        interiorElements.dinerBooths.push(firstBooth, secondBooth);
+    switch (CURRENT_SCENE) {
+        case 'CUMBYS_INTERIOR':
+            interiorGroup = createCumbysInterior(scene);
+            interiorDimensions = { width: INTERIOR_TARGET_SIZE, depth: INTERIOR_TARGET_SIZE };
+            break;
+        case 'GROHOS_INTERIOR':
+            interiorGroup = createShopInterior(scene, 'pizza', 'Grohos Pizza', INTERIOR_TARGET_SIZE, INTERIOR_TARGET_SIZE);
+            interiorDimensions = { width: INTERIOR_TARGET_SIZE, depth: INTERIOR_TARGET_SIZE };
+            break;
+        case 'CLOTHING_STORE_INTERIOR':
+            interiorGroup = createShopInterior(scene, 'clothing', 'Clothing Store', INTERIOR_TARGET_SIZE, INTERIOR_TARGET_SIZE);
+            interiorDimensions = { width: INTERIOR_TARGET_SIZE, depth: INTERIOR_TARGET_SIZE };
+            break;
+        case 'DRYCLEANER_INTERIOR':
+            interiorGroup = createShopInterior(scene, 'drycleaner', 'Dry Cleaners', INTERIOR_TARGET_SIZE, INTERIOR_TARGET_SIZE);
+            interiorDimensions = { width: INTERIOR_TARGET_SIZE, depth: INTERIOR_TARGET_SIZE };
+            break;
+        case 'DUNKIN_INTERIOR':
+            interiorGroup = createShopInterior(scene, 'coffee', 'Donut Galaxy', INTERIOR_TARGET_SIZE, INTERIOR_TARGET_SIZE);
+            interiorDimensions = { width: INTERIOR_TARGET_SIZE, depth: INTERIOR_TARGET_SIZE };
+            break;
+        case 'FLOWER_SHOP_INTERIOR':
+            interiorGroup = createShopInterior(scene, 'flowers', 'Flower Shop', INTERIOR_TARGET_SIZE, INTERIOR_TARGET_SIZE);
+            interiorDimensions = { width: INTERIOR_TARGET_SIZE, depth: INTERIOR_TARGET_SIZE };
+            break;
+        case 'CHURCH_INTERIOR':
+            interiorGroup = createChurchInterior(scene);
+            interiorDimensions = { width: INTERIOR_TARGET_SIZE, depth: INTERIOR_TARGET_SIZE };
+            break;
+        case 'TOWNHALL_INTERIOR':
+            interiorGroup = createTownHallInterior(scene);
+            interiorDimensions = { width: INTERIOR_TARGET_SIZE, depth: INTERIOR_TARGET_SIZE };
+            break;
+        case 'HOUSE_INTERIOR':
+            interiorGroup = createHouseInterior(scene);
+            interiorDimensions = { width: INTERIOR_TARGET_SIZE, depth: INTERIOR_TARGET_SIZE };
+            break;
+        case 'HOSPITAL_INTERIOR':
+            interiorGroup = createHospitalInterior(scene);
+            interiorDimensions = { width: INTERIOR_TARGET_SIZE, depth: INTERIOR_TARGET_SIZE };
+            break;
+        case 'MODERN_INTERIOR':
+            interiorGroup = createModernInterior(scene);
+            interiorDimensions = { width: INTERIOR_TARGET_SIZE, depth: INTERIOR_TARGET_SIZE };
+            break;
+        case 'BRICK_INTERIOR':
+            interiorGroup = createBrickInterior(scene);
+            interiorDimensions = { width: INTERIOR_TARGET_SIZE, depth: INTERIOR_TARGET_SIZE };
+            break;
+        case 'SHOP_INTERIOR':
+            interiorGroup = createShopInterior(scene, 'shop', 'Shop', INTERIOR_TARGET_SIZE, INTERIOR_TARGET_SIZE);
+            interiorDimensions = { width: INTERIOR_TARGET_SIZE, depth: INTERIOR_TARGET_SIZE };
+            break;
+        case 'INDUSTRIAL_INTERIOR':
+            interiorGroup = createIndustrialInterior(scene);
+            interiorDimensions = { width: INTERIOR_TARGET_SIZE, depth: INTERIOR_TARGET_SIZE };
+            break;
+        case 'GRAVEYARD_INTERIOR':
+            interiorGroup = createGraveyardInterior(scene);
+            interiorDimensions = { width: INTERIOR_TARGET_SIZE, depth: INTERIOR_TARGET_SIZE };
+            break;
+        default:
+            // Generic interior for other types
+            interiorGroup = createShopInterior(scene, PLAZA_CONFIG.INTERIOR_TYPE, PLAZA_CONFIG.name, INTERIOR_TARGET_SIZE, INTERIOR_TARGET_SIZE);
+            interiorDimensions = { width: INTERIOR_TARGET_SIZE, depth: INTERIOR_TARGET_SIZE };
     }
     
-    // Tables and chairs - keep the creation functions
-    const createTable = (x, z) => {
-        const tableGroup = new THREE.Group();
-        
-        // Table top with enhanced visibility
-        const tableGeometry = new THREE.BoxGeometry(1.5, 0.1, 1.5, 2, 1, 2);
-        const tableMaterial = createGlowingWireframeMaterial(0xFFAA44, 1.0, 0.3); // Warm orange glow
-        const tableTop = new THREE.Mesh(tableGeometry, tableMaterial);
-        tableTop.position.y = 0.75;
-        tableGroup.add(tableTop);
-        
-        // Table legs
-        const legGeometry = new THREE.BoxGeometry(0.1, 0.75, 0.1, 1, 1, 1);
-        const legMaterial = createWireframeMaterial(0x8B4513);
-        
-        // Create four legs
-        const leg1 = new THREE.Mesh(legGeometry, legMaterial);
-        leg1.position.set(0.6, 0.375, 0.6);
-        tableGroup.add(leg1);
-        
-        const leg2 = new THREE.Mesh(legGeometry, legMaterial);
-        leg2.position.set(0.6, 0.375, -0.6);
-        tableGroup.add(leg2);
-        
-        const leg3 = new THREE.Mesh(legGeometry, legMaterial);
-        leg3.position.set(-0.6, 0.375, 0.6);
-        tableGroup.add(leg3);
-        
-        const leg4 = new THREE.Mesh(legGeometry, legMaterial);
-        leg4.position.set(-0.6, 0.375, -0.6);
-        tableGroup.add(leg4);
-        
-        tableGroup.position.set(x, 0, z);
-        frontShopsGroup.add(tableGroup); // Add to front shops group to move with building
-        return tableGroup;
-    };
+    // Store interior dimensions for skybox floor adjustment
+    streetElements.interiorDimensions = interiorDimensions;
     
-    const createChair = (x, z, rotation) => {
-        const chairGroup = new THREE.Group();
-        
-        // Chair seat with enhanced visibility
-        const seatGeometry = new THREE.BoxGeometry(0.6, 0.1, 0.6, 2, 1, 2);
-        const seatMaterial = createGlowingWireframeMaterial(0xAA88FF, 1.0, 0.3); // Lavender glow
-        const seat = new THREE.Mesh(seatGeometry, seatMaterial);
-        seat.position.y = 0.5;
-        chairGroup.add(seat);
-        
-        // Chair back
-        const backGeometry = new THREE.BoxGeometry(0.6, 0.6, 0.1, 2, 2, 1);
-        const backMaterial = createGlowingWireframeMaterial(0xAA88FF, 1.0, 0.3); // Matching lavender
-        const back = new THREE.Mesh(backGeometry, backMaterial);
-        back.position.set(0, 0.8, -0.25);
-        chairGroup.add(back);
-        
-        // Chair legs
-        const legGeometry = new THREE.BoxGeometry(0.05, 0.5, 0.05, 1, 1, 1);
-        const legMaterial = createWireframeMaterial(0x666666);
-        
-        // Create four legs
-        const leg1 = new THREE.Mesh(legGeometry, legMaterial);
-        leg1.position.set(0.25, 0.25, 0.25);
-        chairGroup.add(leg1);
-        
-        const leg2 = new THREE.Mesh(legGeometry, legMaterial);
-        leg2.position.set(0.25, 0.25, -0.25);
-        chairGroup.add(leg2);
-        
-        const leg3 = new THREE.Mesh(legGeometry, legMaterial);
-        leg3.position.set(-0.25, 0.25, 0.25);
-        chairGroup.add(leg3);
-        
-        const leg4 = new THREE.Mesh(legGeometry, legMaterial);
-        leg4.position.set(-0.25, 0.25, -0.25);
-        chairGroup.add(leg4);
-        
-        chairGroup.position.set(x, 0, z);
-        chairGroup.rotation.y = rotation;
-        frontShopsGroup.add(chairGroup); // Add to front shops group to move with building
-        return chairGroup;
-    };
+    // Store reference for exit portal and interior bounds
+    streetElements.interiorGroup = interiorGroup;
+    streetElements.interiorBounds = interiorGroup.userData.bounds;
+    streetElements.exitPortal = null; // Will be set by finding the exit door
     
-    // Add table with chairs in better positions
-    const centerTable = createTable(3, -5); // Moved inside
-    interiorElements.tables = [centerTable];
-    
-    // Add chairs around center table - repositioned
-    interiorElements.chairs = [
-        createChair(3, -6, 0),
-        createChair(3, -4, Math.PI),
-        createChair(4, -5, -Math.PI / 2),
-        createChair(2, -5, Math.PI / 2)
-    ];
-    
-    // Add another table
-    const sideTable = createTable(-3, -3);
-    interiorElements.tables.push(sideTable);
-    
-    // Add chairs around side table
-    interiorElements.chairs.push(
-        createChair(-3, -4, 0),
-        createChair(-3, -2, Math.PI),
-        createChair(-2, -3, -Math.PI / 2),
-        createChair(-4, -3, Math.PI / 2)
-    );
-    
-    // Karaoke Stage - repositioned with prominent wireframe
-    const stageGeometry = new THREE.BoxGeometry(8, 0.3, 4, 2, 1, 2); // Very few segments for thicker wireframe
-    const stageMaterial = createWireframeMaterial(0xBF8F00); // Bright yellow 
-    stageMaterial.wireframeLinewidth = 2; // Limited browser support
-    const stage = new THREE.Mesh(stageGeometry, stageMaterial);
-    
-    stage.position.set(0, 0.15, -12.5); // Back of the room
-    stage.scale.set(1.02, 1.02, 1.02); // Slightly larger to emphasize
-    frontShopsGroup.add(stage); // Add to front shops group to move with building
-    interiorElements.stage = stage;
-    
-    
-    // Reposition signup sheet on the rotated bar
-    const createSignupSheet = () => {
-        const sheetGroup = new THREE.Group();
-        
-        // Paper
-        const paperGeometry = new THREE.BoxGeometry(0.3, 0.01, 0.4, 2, 1, 2);
-        const paperMaterial = createWireframeMaterial(0xFFFFFF); // White paper
-        const paper = new THREE.Mesh(paperGeometry, paperMaterial);
-        sheetGroup.add(paper);
-        
-        // Dotted lines (simplified as thin boxes)
-        const lineCount = 4;
-        for (let i = 0; i < lineCount; i++) {
-            const lineGeometry = new THREE.BoxGeometry(0.25, 0.005, 0.01, 4, 1, 1);
-            const lineMaterial = createWireframeMaterial(0x000000); // Black lines
-            const line = new THREE.Mesh(lineGeometry, lineMaterial);
-            line.position.z = -0.15 + i * 0.1;
-            sheetGroup.add(line);
-        }
-        
-        // Pen
-        const penGeometry = new THREE.BoxGeometry(0.01, 0.01, 0.15, 1, 1, 2);
-        const penMaterial = createWireframeMaterial(0x0000FF); // Blue pen
-        const pen = new THREE.Mesh(penGeometry, penMaterial);
-        pen.position.set(0.15, 0.01, -0.1);
-        pen.rotation.y = Math.PI / 4;
-        sheetGroup.add(pen);
-        
-        return sheetGroup;
-    };
-    
-    // Add signup sheet to bar counter
-    const signupSheet = createSignupSheet();
-    signupSheet.position.set(-7.5, 1.52, -9.5); // Near the front end of the bar, on top of the bar (y=1.51)
-    frontShopsGroup.add(signupSheet); // Add to front shops group to move with building
-    interiorElements.signupSheet = signupSheet;
-    
-    // Narragansett Tallboy Beer Cans (from lyrics: "I'll order us a Gansett pair")
-    const createBeerCan = (x, z, customY = null) => {
-        const canGroup = new THREE.Group();
-        
-        // Can body
-        const canGeometry = new THREE.CylinderGeometry(0.1, 0.1, 0.4, 6, 1);
-        const canMaterial = createWireframeMaterial(0xCCCCCC); // Silver can
-        const can = new THREE.Mesh(canGeometry, canMaterial);
-        canGroup.add(can);
-        
-        // Beer can label (simplified as a band)
-        const labelGeometry = new THREE.CylinderGeometry(0.101, 0.101, 0.2, 6, 1);
-        const labelMaterial = createWireframeMaterial(0xFF0000); // Red label
-        const label = new THREE.Mesh(labelGeometry, labelMaterial);
-        canGroup.add(label);
-        
-        // Position the can group - using custom Y if provided, otherwise default to table height
-        canGroup.position.set(x, customY !== null ? customY : 1.0, z);
-        frontShopsGroup.add(canGroup); // Add to front shops group to move with building
-        return canGroup;
-    };
-    
-    // Add a pair of beers on the center table ("a Gansett pair")
-    interiorElements.beerCans = [
-        createBeerCan(3.2, -5.2),  // Default y=1.0 for table height
-        createBeerCan(2.8, -4.8)   // Default y=1.0 for table height
-    ];
-    
-    // Add beers to the back booth table on the right wall
-    interiorElements.boothBeers = [
-        createBeerCan(8.6, -13.3, 1),  // On the back booth table
-        createBeerCan(8.3, -13.1, 1)   // Slightly offset for natural placement
-    ];
-    
-    // Add beers along the bar counter with y=1.5 (top of bar)
-    interiorElements.barBeers = [
-        createBeerCan(-8.3, -6, 1.75),  // On top of bar counter (y=1.5)
-        createBeerCan(-8.2, -8, 1.75),  // On top of bar counter (y=1.5)
-        createBeerCan(-7.9, -12, 1.75)   // On top of bar counter (y=1.5)
-    ];
-    
-    // Add TV/Screen on the wall for karaoke lyrics - moved to back wall
-    const screenGeometry = new THREE.BoxGeometry(7, 2, 0.3, 6, 4, 1); // Bigger screen: wider and taller
-    const screenMaterial = createWireframeMaterial(0x00FFFF); // Cyan for screen
-    const tvScreen = new THREE.Mesh(screenGeometry, screenMaterial);
-    tvScreen.position.set(0, 3.5, -14.9); // Moved to back wall
-    tvScreen.rotation.y = Math.PI; // Rotate to face into the room
-    frontShopsGroup.add(tvScreen); // Add to front shops group to move with building
-    interiorElements.tvScreen = tvScreen;
-    
-    // Add counter on the stage
-    const counterGeometry = new THREE.BoxGeometry(6, 1.2, 1.5, 4, 3, 2);
-    const counterMaterial = createWireframeMaterial(0x8B4513); // Brown wood color
-    const counter = new THREE.Mesh(counterGeometry, counterMaterial);
-    counter.position.set(0, 0.6, -11.25); // Centered on the stage
-    frontShopsGroup.add(counter); // Add to front shops group to move with building
-    interiorElements.counter = counter;
-    
-    // Add counter top
-    const counterTopGeometry = new THREE.BoxGeometry(6.2, 0.1, 1.7, 4, 1, 2);
-    const counterTopMaterial = createWireframeMaterial(0xDEB887); // Light wood color
-    const counterTop = new THREE.Mesh(counterTopGeometry, counterTopMaterial);
-    counterTop.position.set(0, 1.25, -11.25); // On top of the counter
-    frontShopsGroup.add(counterTop); // Add to front shops group to move with building
-    interiorElements.counterTop = counterTop;
-    
-    
-    return interiorElements;
-};
-
-// Create all scenes
-const streetElements = createStreetScene();
-
-// Only create interior elements for the plaza scene (not for forest park scene)
-let interiorElements = {};
-if (!PLAZA_CONFIG.FRONT_IS_PARK) {
-    interiorElements = createInteriorScene(streetElements.frontShopsGroup);
-    console.log("🎤 Created karaoke bar interior elements for plaza scene");
-} else {
-    console.log("🌳 Skipped karaoke bar interior elements for forest park scene");
-}
-
-// Check for and remove any unwanted wireframe elements in the doorway area
-const cleanupUnwantedElements = () => {
-    console.log("Cleaning up unwanted elements in the front wall area...");
-    
-    // Get the building dimensions from the street elements
-    // We need to reference these in a scope outside createStreetScene
-    const buildingWidth = 20; // Same as defined in createStreetScene
-    const doorWidth = 1.8;    // Same as in createStreetScene
-    const doorHeight = 3.2;   // Same as in createStreetScene
-    
-    // Function to determine if a plane might be a misplaced floor or ceiling
-    // Function to determine if a plane might be a misplaced floor or ceiling
-    const isMisplacedFloorOrCeiling = (obj) => {
-        // Check if it's a plane geometry rotated like a floor/ceiling
-        if (obj.geometry.type === 'PlaneGeometry') {
-            // If it's rotated like a floor/ceiling (around X axis)
-            const isFloorRotation = Math.abs(obj.rotation.x - Math.PI/2) < 0.1 || 
-                                  Math.abs(obj.rotation.x + Math.PI/2) < 0.1;
-            
-            // If it's marked as a valid floor/ceiling, it's not misplaced
-            if (obj.userData.isFloor || obj.userData.isCeiling) {
-                return false;
-            }
-            
-            // Otherwise, check its position
-            const pos = new THREE.Vector3();
-            obj.getWorldPosition(pos);
-            
-            // If it's near the front wall and rotated like a floor/ceiling, it's likely misplaced
-            return isFloorRotation && Math.abs(pos.z) < 1.0;
-        }
-        return false;
-    };
-    
-    // Remove any wireframe planes that might be overlapping with the front wall
-    scene.traverse((object) => {
-        // Check for meshes
-        if (object.isMesh && object.geometry) {
-            // Check if it might be a misplaced floor or ceiling
-            if (isMisplacedFloorOrCeiling(object)) {
-                console.log("Found misplaced floor/ceiling-like object:", object);
-                object.visible = false;
-            }
-            
-            // Get position in world space
-            const pos = new THREE.Vector3();
-            object.getWorldPosition(pos);
-            
-            // If this mesh is near the front wall (z near 0)
-            if (Math.abs(pos.z) < 0.5) {
-                // Check for any plane that goes across the entire front and isn't part of our walls
-                if (object.geometry.type === 'PlaneGeometry' && 
-                    Math.abs(pos.x) < buildingWidth/2 &&
-                    Math.abs(object.rotation.x) < 0.1) {
-                    console.log("Found unwanted plane at position:", pos.x, pos.y, pos.z);
-                    object.visible = false;
-                }
-            }
+    // Find exit door in the interior
+    interiorGroup.traverse((child) => {
+        if (child.userData && child.userData.isExitPortal) {
+            streetElements.exitPortal = child;
         }
     });
     
-    // Create an additional clearing object to ensure nothing appears in the doorway
-    const doorwayClearingSurface = new THREE.Mesh(
-        new THREE.BoxGeometry(doorWidth + 1.0, doorHeight + 1.0, 10),
-        new THREE.MeshBasicMaterial({
-            transparent: true,
-            opacity: 0,
-            depthWrite: false,
-            colorWrite: false,
-            depthTest: false
-        })
-    );
-    doorwayClearingSurface.position.set(0, doorHeight/2, 0);
-    scene.add(doorwayClearingSurface);
-};
-
-// Call the cleanup function
-cleanupUnwantedElements();
-
-// Initialize scene visibility - MODIFIED to support the new approach
-const resetSceneVisibility = () => {
-    // Keep both scenes visible at all times
-    sceneGroups.exterior.visible = true;
-    sceneGroups.interior.visible = true;
+    // Extract interactive items for flavor text system
+    streetElements.interactiveItems = interiorGroup.userData.interactiveItems || [];
     
-    // Verify scene contents
-    console.log(`Exterior scene contains ${sceneGroups.exterior.children.length} children`);
-    console.log(`Interior scene contains ${sceneGroups.interior.children.length} children`);
-    console.log("Scene visibility reset - all elements remain visible");
-};
-
-// Call this after creating scenes
-resetSceneVisibility();
-
-// Neon light glow animation and shared animation variables
-let time = 0;
-
-// Get average frequency in a range of the analyzer data (simplified - no audio)
-const getAverageFrequency = (start, end) => {
-    return 0; // No audio, always return 0
-};
-
-const animateNeonSigns = () => {
-    time += 0.05;
+    streetElements.npcs = createInteriorNPCs(CURRENT_SCENE, interiorGroup);
+} else {
+    // Create street scene (exterior)
+    streetElements = createStreetScene();
     
-    // Animate the KARAOKE sign letters with alternating colors
-    if (streetElements.karaokeSigns) {
-        streetElements.karaokeSigns.children.forEach((letter, index) => {
-            // Create flashing effect with sine wave
-            const blinkSpeed = 0.5 + index * 0.1;
-            const brightness = Math.sin(time * blinkSpeed) * 0.5 + 0.5;
-            
-            // Alternate colors
-            const baseColor = index % 2 === 0 ? 0xff0000 : 0x00ffff;
-            
-            // Update the letter color
-            const r = (baseColor >> 16) & 255;
-            const g = (baseColor >> 8) & 255;
-            const b = baseColor & 255;
-            
-            letter.material.color.setRGB(
-                r / 255 * brightness,
-                g / 255 * brightness,
-                b / 255 * brightness
-            );
-        });
+    // Initialize interactive items as empty array for exterior scenes
+    streetElements.interactiveItems = [];
+    
+    // Create interior elements for karaoke bar (only in PLAZA scene)
+    if (CURRENT_SCENE === 'PLAZA') {
+        interiorElements = createInteriorScene(streetElements.frontShopsGroup);
     }
     
-    // Animate street lamp lights
-    if (streetElements.streetLamps) {
-        streetElements.streetLamps.forEach((lamp, index) => {
-            // Get both the light mesh and point light
-            const lightMesh = lamp.children[4]; // The orange light sphere
-            const pointLight = lamp.children[5]; // The point light
-            
-            // Create a subtle flicker effect typical of sodium vapor lamps
-            const baseIntensity = 0.8;
-            const flickerSpeed = 0.1;
-            const flickerAmount = 0.15;
-            const flicker = baseIntensity + (Math.sin(time * flickerSpeed + index * 2.1) * flickerAmount) +
-                           (Math.sin(time * flickerSpeed * 2.7 + index * 1.3) * flickerAmount * 0.5);
-            
-            // Update both the mesh color and point light intensity
-            const color = new THREE.Color(0xFF8C00);
-            color.multiplyScalar(flicker);
-            lightMesh.material.color.copy(color);
-            pointLight.intensity = flicker;
-        });
-    }
-    
-    // Animate the bar building exterior walls with slow color changes
-    if (streetElements.walls) {
-        // Use a very slow cycle for color changes
-        const slowTime = time * 0.05; 
-        
-        // Create a cycling color effect with RGB components
-        const r = 0.25 + 0.25 * Math.sin(slowTime);
-        const g = 0.25 + 0.25 * Math.sin(slowTime + Math.PI/2);
-        const b = 0.6 + 0.3 * Math.sin(slowTime + Math.PI);
-        
-        // Apply to all wall segments
-        streetElements.walls.forEach(wallSegment => {
-            // Skip null or undefined wall segments
-            if (!wallSegment) return;
-            
-            wallSegment.traverse(child => {
-                // Check if it's a valid mesh with a material and color
-                if (child.isMesh && child.material) {
-                    // Only proceed if material has a color property
-                    if (child.material.wireframe && child.material.color) {
-                        // Store original color on first pass if not already stored
-                        if (!child.userData.originalColor && child.material.color.clone) {
-                            child.userData.originalColor = child.material.color.clone();
-                        }
-                        
-                        // Update the color
-                        child.material.color.setRGB(r, g, b);
-                    }
-                }
-            });
-        });
-        
-        // Also update the glow segments with a complementary color
-        if (streetElements.glowGroup) {
-            // Slightly different color for the glow to complement the walls
-            const glowR = b;
-            const glowG = r;
-            const glowB = g;
-            
-            streetElements.glowGroup.traverse(child => {
-                // Only proceed if it's a valid mesh with wireframe material
-                if (child.isMesh && child.material && child.material.wireframe && child.material.color) {
-                    child.material.color.setRGB(glowR, glowG, glowB);
-                    
-                    // Only modify opacity if the material supports transparency
-                    if (child.material.transparent) {
-                        // Vary the opacity slightly as well for a pulsing effect
-                        const opacity = 0.4 + 0.2 * Math.sin(slowTime * 1.5);
-                        child.material.opacity = opacity;
-                    }
-                }
-            });
-        }
-    }
-    
-    // Animate cars
-    if (streetElements.cars) {
-        // Track positions for collision detection
-        const carPositions = {};
-        
-        // Move existing cars
-        for (let i = streetElements.cars.length - 1; i >= 0; i--) {
-            const car = streetElements.cars[i];
-            const direction = car.userData.direction;
-            
-            // Set a consistent speed for all cars in the same direction
-            const speed = direction === 'left' ? 0.05 : -0.05;
-            
-            // Store previous position for collision detection
-            const prevX = car.position.x;
-            
-            // Calculate new position
-            const newX = prevX + speed;
-            
-            // Remove cars that go off-screen
-            if ((direction === 'left' && newX > 140) || 
-                (direction === 'right' && newX < -140)) {
-                streetElements.streetElementsGroup.remove(car);
-                streetElements.cars.splice(i, 1);
-                continue;
-            }
-            
-            // Check for collisions with other cars before moving
-            let canMove = true;
-            const carWidth = 2; // Car width
-            const minSafeDistance = 3; // Minimum safe distance between cars
-            
-            Object.keys(carPositions).forEach(otherCarIndex => {
-                if (parseInt(otherCarIndex) !== i) {
-                    const otherCarInfo = carPositions[otherCarIndex];
-                    const otherX = otherCarInfo.x;
-                    const otherZ = otherCarInfo.z;
-                    const otherDirection = otherCarInfo.direction;
-                    
-                    // Only check for collisions in the same lane
-                    if (Math.abs(car.position.z - otherZ) < 1) {
-                        // Check if cars are too close (based on direction)
-                        if (direction === otherDirection) {
-                            // Cars moving in same direction
-                            const distance = Math.abs(newX - otherX);
-                            if (distance < minSafeDistance) {
-                                canMove = false;
-                            }
-                        }
-                    }
-                }
-            });
-            
-            // Move car if no collision
-            if (canMove) {
-                car.position.x = newX;
-            }
-            
-            // Store this car's position for collision checking with other cars
-            carPositions[i] = {
-                x: car.position.x,
-                z: car.position.z,
-                direction: direction
-            };
-        }
-        
-        // More controlled car spawning
-        const currentTime = time;
-        const timeSinceLastSpawn = currentTime - (streetElements.lastCarSpawnTime || 0);
-        
-        // Fixed time intervals for car spawning (6-12 seconds)
-        const spawnInterval = 6 + Math.sin(time * 0.1) * 3; // Varies between 3-9 seconds
-        
-        // Only spawn new cars if we're below the limit and enough time has passed
-        if (timeSinceLastSpawn > spawnInterval && streetElements.cars.length < 6) {
-            // Alternate between left and right lanes for more balance
-            const spawnLeft = !streetElements.lastSpawnedLeft;
-            streetElements.lastSpawnedLeft = spawnLeft;
-            
-            // Check if there's already a car near the spawn point
-            let canSpawn = true;
-            const spawnX = spawnLeft ? -140 : 140; // Spawn at the far ends of the 300-unit road
-            const spawnZ = spawnLeft ? 2 : -2; // Relative to street group (2 = left lane, -2 = right lane)
-            
-            Object.values(carPositions).forEach(carInfo => {
-                const distance = Math.abs(carInfo.x - spawnX);
-                if (Math.abs(carInfo.z - spawnZ) < 1 && distance < 10) {
-                    canSpawn = false; // Don't spawn if another car is near the spawn point
-                }
-            });
-            
-            if (canSpawn) {
-                // Spawn new car
-                const direction = spawnLeft ? 'left' : 'right';
-                const newCar = createCar(spawnX, getRandomCarColor(), direction);
-                newCar.position.z = spawnZ; // Set proper lane position
-                streetElements.streetElementsGroup.add(newCar); // Add to street group
-                streetElements.cars.push(newCar);
-                
-                // Update the last spawn time
-                streetElements.lastCarSpawnTime = currentTime;
-            }
-        }
-    }
-    
-    // Animate bus
-    if (streetElements.bus) {
-        const bus = streetElements.bus;
-        // Move bus based on direction and custom speed
-        const speed = bus.userData.speed || 0.03;
-        if (bus.userData.direction === 'left') {
-            bus.position.x += speed;
-            if (bus.position.x > 140) bus.position.x = -140; // Loop when off-screen (full road length)
-        } else { // 'right'
-            bus.position.x -= speed;
-            if (bus.position.x < -140) bus.position.x = 140; // Loop when off-screen (full road length)
-            
-            // Make the bus stop briefly at the bus stop
-            const busStopX = -15; // Same X position as the bus stop
-            if (Math.abs(bus.position.x - busStopX) < 1) {
-                // Slow down near bus stop but stay in same lane
-                bus.userData.speed = 0.005;
-            } else {
-                // Normal speed elsewhere
-                bus.userData.speed = 0.03;
-            }
-        }
-    }
-    
-    // Don't force transition - let audio system handle it
-};
+    // Add NPCs
+    streetElements.npcs = createNPCs(PLAZA_CONFIG, CURRENT_SCENE, scene);
+}
 
-// Event listener for scene transitions with spacebar - COMMENTED OUT
-/*
+// Initialize NPC interaction system
+initializeNPCInteraction();
+initializeConversationHandlers(CURRENT_SCENE);
+
+// Initialize phone UI
+initializePhoneUI();
+initializePhoneKeyboard();
+
+// =====================================================
+// SKYBOX AND ENVIRONMENT
+// =====================================================
+createNightSky(scene);
+// Pass interior dimensions if we're in an interior scene
+const interiorDims = PLAZA_CONFIG.IS_INTERIOR ? streetElements.interiorDimensions : null;
+if (interiorDims) {
+    console.log(`🏪 Passing interior dimensions to skybox: ${interiorDims.width}x${interiorDims.depth}`);
+}
+const skybox = createSkybox(scene, CURRENT_SCENE, interiorDims);
+scene.userData.camera = camera;
+
+// =====================================================
+// KEYBOARD EVENT HANDLERS
+// =====================================================
 document.addEventListener('keydown', (event) => {
-    if (event.code === 'Space' && !isTransitioning) {
-        const nextSceneName = currentScene === 'exterior' ? 'interior' : 'exterior';
-        console.log(`Spacebar pressed: Transitioning to ${nextSceneName}`);
-        transitionToScene(nextSceneName);
+    // Use Space or F for scene switching - Space is primary, F kept for backwards compatibility
+    // Note: Space is also used for conversations/items in npcs.js, but that handler checks first
+    // and only processes if there's an active conversation or item interaction
+    if (event.code === 'Space' || event.code === 'KeyF') {
+        // Skip if in conversation (Space will be handled by npcs.js for conversations)
+        if (event.code === 'Space' && hasActiveConversation()) {
+            return;
+        }
+        // First check for building door portals
+        if (streetElements && streetElements.buildingPortals) {
+            let nearestPortal = null;
+            let nearestDistance = Infinity;
+            
+            streetElements.buildingPortals.forEach(portal => {
+                const distance = camera.position.distanceTo(portal.position);
+                if (distance < 5 && distance < nearestDistance) {
+                    nearestPortal = portal;
+                    nearestDistance = distance;
+                }
+            });
+            
+            if (nearestPortal) {
+                // Get destination scene for building portal
+                const getBuildingPortalDestination = (buildingStyle) => {
+                    const portalMap = {
+                        'groton_church': { key: 'CHURCH_INTERIOR', name: 'Church Interior' },
+                        'groton_townhall': { key: 'TOWNHALL_INTERIOR', name: 'Town Hall Interior' },
+                        'groton_colonial': { key: 'HOUSE_INTERIOR', name: 'Colonial House Interior' },
+                        'graveyard': { key: 'GRAVEYARD_INTERIOR', name: 'Graveyard' },
+                        'hospital': { key: 'HOSPITAL_INTERIOR', name: 'Hospital Interior' },
+                        'modern': { key: 'MODERN_INTERIOR', name: 'Modern Building Interior' },
+                        'brick': { key: 'BRICK_INTERIOR', name: 'Brick Building Interior' },
+                        'shop': { key: 'SHOP_INTERIOR', name: 'Shop Interior' },
+                        'industrial': { key: 'INDUSTRIAL_INTERIOR', name: 'Industrial Building Interior' },
+                        // Shop styles for front shops
+                        'convenience': { key: 'CUMBYS_INTERIOR', name: 'Grumby\'s Store' },
+                        'pizza': { key: 'GROHOS_INTERIOR', name: 'Grohos Pizza' },
+                        'clothing': { key: 'CLOTHING_STORE_INTERIOR', name: 'Clothing Store' },
+                        'drycleaner': { key: 'DRYCLEANER_INTERIOR', name: 'Dry Cleaners' },
+                        'coffee': { key: 'DUNKIN_INTERIOR', name: 'Donut Galaxy' },
+                        'flowers': { key: 'FLOWER_SHOP_INTERIOR', name: 'Flower Shop' }
+                    };
+                    return portalMap[buildingStyle] || { key: 'PLAZA', name: 'Downtown' };
+                };
+                
+                const targetScene = getBuildingPortalDestination(nearestPortal.style);
+                console.log(`Entering ${nearestPortal.name}, switching to ${targetScene.key} (${targetScene.name})`);
+                
+                // Save which exterior scene we came from before switching to interior
+                localStorage.setItem('previousExteriorScene', CURRENT_SCENE);
+                
+                // Save the building portal position so we can return to it when exiting
+                const portalPosition = {
+                    x: nearestPortal.position.x,
+                    y: camera.position.y,
+                    z: nearestPortal.position.z
+                };
+                localStorage.setItem('buildingPortalPosition', JSON.stringify(portalPosition));
+                
+                // Check if this is a far-side building (at FAR_BUILDINGS_Z)
+                // Far buildings face the street, so when exiting we should face the street (no 180 rotation)
+                const isFarBuilding = Math.abs(nearestPortal.position.z - PLAZA_CONFIG.FAR_BUILDINGS_Z) < 0.1;
+                localStorage.setItem('isFarBuilding', isFarBuilding ? 'true' : 'false');
+                console.log(`Saved building portal position: (${portalPosition.x}, ${portalPosition.y}, ${portalPosition.z}), isFarBuilding: ${isFarBuilding}`);
+                
+                // Switch to interior scene
+                switchScene(targetScene.key);
+                return;
+            }
+        }
+        
+        // Check exit portal if in interior scene
+        if (PLAZA_CONFIG.IS_INTERIOR && streetElements && streetElements.exitPortal) {
+            const exitPortalPos = new THREE.Vector3();
+            streetElements.exitPortal.getWorldPosition(exitPortalPos);
+            const distanceToExit = camera.position.distanceTo(exitPortalPos);
+            
+            if (distanceToExit < 3) {
+                const previousScene = localStorage.getItem('previousExteriorScene') || 'PLAZA';
+                console.log(`Exiting interior, returning to ${previousScene}`);
+                switchScene(previousScene);
+                return;
+            }
+        }
+        
+        // Fall back to bus stop if no building portal nearby (only for exterior scenes)
+        if (!PLAZA_CONFIG.IS_INTERIOR) {
+            // Linear scene progression: PLAZA → FOREST_SUBURBAN → POND → PLAZA
+            const busStopX = PLAZA_CONFIG.ROAD_POSITION_X ? PLAZA_CONFIG.ROAD_POSITION_X + 3 : -15;
+            const busStopPosition = new THREE.Vector3(busStopX, 0, PLAZA_CONFIG.NEAR_SIDEWALK_Z);
+            const distanceToBusStop = camera.position.distanceTo(busStopPosition);
+            
+            if (distanceToBusStop < 5) {
+                const nextScene = getNextSceneInfo(CURRENT_SCENE);
+                console.log(`Switching to ${nextScene.key} (${nextScene.name})`);
+                switchScene(nextScene.key);
+            }
+        }
     }
 });
-*/
 
-// Handle window resize
+// =====================================================
+// WINDOW RESIZE
+// =====================================================
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    
-    // Update the pixelated render target
-    const newRenderTargetWidth = Math.floor(window.innerWidth * pixelRatio);
-    const newRenderTargetHeight = Math.floor(window.innerHeight * pixelRatio);
-    renderTarget.setSize(newRenderTargetWidth, newRenderTargetHeight);
-
-    // Update post-processing ping-pong buffers
-    postBufferA.setSize(newRenderTargetWidth, newRenderTargetHeight);
-    postBufferB.setSize(newRenderTargetWidth, newRenderTargetHeight);
-
-    // Update shader resolution uniform
-    if (postMaterial.uniforms.resolution) {
-        postMaterial.uniforms.resolution.value.set(newRenderTargetWidth, newRenderTargetHeight);
-    }
-    if (postMaterial.uniforms.scanlineFrequency) { // Also update scanline frequency if it depends on height
-        postMaterial.uniforms.scanlineFrequency.value = newRenderTargetHeight * 1.5;
-    }
+    handleResize();
 });
 
-// NPC Interaction System - moved before animate function
-let nearbyNPC = null;
-const interactionUI = document.createElement('div');
-interactionUI.style.position = 'fixed';
-interactionUI.style.bottom = '20px';
-interactionUI.style.left = '50%';
-interactionUI.style.transform = 'translateX(-50%)';
-interactionUI.style.padding = '15px';
-interactionUI.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
-interactionUI.style.color = 'white';
-interactionUI.style.fontFamily = 'Arial, sans-serif';
-interactionUI.style.fontSize = '16px';
-interactionUI.style.borderRadius = '8px';
-interactionUI.style.display = 'none';
-interactionUI.style.zIndex = '1000';
-interactionUI.style.maxWidth = '400px';
-interactionUI.style.textAlign = 'center';
-document.body.appendChild(interactionUI);
-
-// Old scene UI removed - now using bus stop proximity UI instead
-
-// Dialogue system is now handled by dialogue.js
-
-// Check for nearby NPCs
-const checkNearbyNPCs = () => {
-    const cameraPosition = camera.position;
-    let closestNPC = null;
-    let closestDistance = Infinity;
-    
-    if (streetElements.npcs) {
-        streetElements.npcs.forEach(npc => {
-            const npcPosition = npc.position;
-            const distance = cameraPosition.distanceTo(npcPosition);
-            
-            if (distance < 3 && distance < closestDistance) { // Within 3 units
-                closestNPC = npc;
-                closestDistance = distance;
-            }
+// =====================================================
+// ANIMATION LOOP (Using new module)
+// =====================================================
+const animate = createAnimationLoop(
+    scene, 
+    camera, 
+    renderer, 
+    renderTarget,
+    postMaterial,
+    postScene,
+    postCamera,
+    streetElements,
+    () => updateCameraPosition(camera, PLAZA_CONFIG, streetElements),
+    () => checkNearbyNPCs(camera, streetElements.npcs),
+    () => checkNearbyItems(camera, streetElements.interactiveItems),
+    () => checkBusStopProximity(camera, PLAZA_CONFIG, CURRENT_SCENE, streetElements),
+    () => {
+        // Update mobile action button based on context
+        if (!isMobile) return;
+        
+        const nearbyNPC = streetElements.npcs?.find(npc => {
+            return camera.position.distanceTo(npc.position) < 3;
         });
-    }
-    
-    if (closestNPC !== nearbyNPC) {
-        nearbyNPC = closestNPC;
+        
+        // Check for building door portals first
+        let nearBuildingPortal = false;
+        if (streetElements && streetElements.buildingPortals) {
+            nearBuildingPortal = streetElements.buildingPortals.some(portal => {
+                return camera.position.distanceTo(portal.position) < 5;
+            });
+        }
+        
+        const busStopPosition = new THREE.Vector3(-15, 0, PLAZA_CONFIG.NEAR_SIDEWALK_Z);
+        const distanceToBusStop = camera.position.distanceTo(busStopPosition);
         
         if (nearbyNPC) {
-            const npcName = nearbyNPC.userData.name;
-            interactionUI.innerHTML = `
-                <div>Near ${npcName}</div>
-                <div style="font-size: 14px; margin-top: 5px;">Press 'E' to talk</div>
-            `;
-            interactionUI.style.display = 'block';
+            updateMobileActionButton('talk', 'TALK');
+        } else if (nearBuildingPortal) {
+            updateMobileActionButton('enter', 'ENTER');
+        } else if (distanceToBusStop < 5) {
+            updateMobileActionButton('travel', 'TRAVEL');
+        } else if (getConversationAtEnd()) {
+            updateMobileActionButton('continue', 'CONTINUE');
         } else {
-            interactionUI.style.display = 'none';
+            updateMobileActionButton('run', 'RUN');
         }
-    }
-};
+    },
+    createCar,
+    getRandomCarColor,
+    updateDebugInfo
+);
 
-// Handle interaction key
-document.addEventListener('keydown', (event) => {
-    if (event.code === 'KeyE') {
-        if (hasActiveConversation()) {
-            // Check if conversation is at the end waiting for final E press
-            if (conversationAtEnd) {
-                // Final E press - unlock song and end conversation
-                console.log('Final E press - ending conversation...');
-                const unlockedSong = unlockCurrentSong();
-                if (unlockedSong) {
-                    interactionUI.innerHTML = `
-                        <div style="font-size: 14px; color: #88FF88; margin-bottom: 10px;">
-                            🎵 Unlocked: ${unlockedSong.replace(/_/g, ' ')}
-                        </div>
-                        <div style="font-size: 12px; color: #CCCCCC;">
-                            Press any key to continue...
-                        </div>
-                    `;
-                    
-                    setTimeout(() => {
-                        const endConversationHandler = () => {
-                            endConversation();
-                            if (nearbyNPC) {
-                                const npcName = nearbyNPC.userData.name;
-                                interactionUI.innerHTML = `
-                                    <div>Near ${npcName}</div>
-                                    <div style="font-size: 14px; margin-top: 5px;">Press 'E' to talk</div>
-                                `;
-                            } else {
-                                interactionUI.style.display = 'none';
-                            }
-                            document.removeEventListener('keydown', endConversationHandler);
-                        };
-                        document.addEventListener('keydown', endConversationHandler);
-                    }, 100);
-                } else {
-                    // No unlock, just end the conversation immediately
-                    endConversation();
-                    if (nearbyNPC) {
-                        const npcName = nearbyNPC.userData.name;
-                        interactionUI.innerHTML = `
-                            <div>Near ${npcName}</div>
-                            <div style="font-size: 14px; margin-top: 5px;">Press 'E' to talk</div>
-                        `;
-                    } else {
-                        interactionUI.style.display = 'none';
-                    }
-                }
-            } else {
-                // Continue ongoing conversation
-                const dialogue = getCurrentDialogue();
-                if (dialogue) {
-                    console.log('Showing dialogue:', dialogue.text);
-                    // Show current dialogue
-                    showDialogueStep(dialogue);
-                    
-                    // Advance to next line
-                    advanceConversation();
-                    
-                    // Check if there are more lines
-                    const nextDialogue = getCurrentDialogue();
-                    console.log('After advance, nextDialogue:', nextDialogue);
-                    if (!nextDialogue) {
-                        // No more lines, set flag to wait for final E press
-                        console.log('Last line shown, waiting for final E press...');
-                        setConversationAtEnd(true);
-                    }
-                }
-            }
-        } else if (nearbyNPC) {
-            // Start new conversation
-            const npcName = nearbyNPC.userData.name;
-            const sceneType = CURRENT_SCENE;
-            
-            if (startConversation(npcName, sceneType)) {
-                // Show the first line immediately
-                const dialogue = getCurrentDialogue();
-                if (dialogue) {
-                    showDialogueStep(dialogue);
-                    advanceConversation();
-                }
-            }
-        }
-    }
-});
-
-const showDialogueStep = (dialogue) => {
-    if (!dialogue) return;
-    
-    interactionUI.innerHTML = `
-        <div style="font-weight: bold; margin-bottom: 10px; color: ${dialogue.speaker === 'Player' ? '#88AAFF' : '#FFFFFF'};">
-            ${dialogue.speaker}:
-        </div>
-        <div style="margin-bottom: 15px;">"${dialogue.text}"</div>
-        <div style="font-size: 12px; color: #CCCCCC;">
-            Press E to continue...
-        </div>
-    `;
-};
-
-// Create scene switching UI
-const sceneSwichUI = document.createElement('div');
-sceneSwichUI.style.position = 'fixed';
-sceneSwichUI.style.top = '150px';
-sceneSwichUI.style.left = '20px';
-sceneSwichUI.style.color = '#FFFF88';
-sceneSwichUI.style.fontFamily = 'monospace';
-sceneSwichUI.style.fontSize = '14px';
-sceneSwichUI.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-sceneSwichUI.style.padding = '10px';
-sceneSwichUI.style.borderRadius = '5px';
-sceneSwichUI.style.display = 'none'; // Hidden by default
-sceneSwichUI.style.zIndex = '1000';
-document.body.appendChild(sceneSwichUI);
-
-// Check for bus stop proximity for scene switching
-const checkBusStopProximity = () => {
-    const busStopPosition = new THREE.Vector3(-15, 0, PLAZA_CONFIG.NEAR_SIDEWALK_Z);
-    const playerPosition = camera.position;
-    const distanceToBusStop = playerPosition.distanceTo(busStopPosition);
-    
-    if (distanceToBusStop < 5) { // Within 5 units of bus stop
-        const targetScene = CURRENT_SCENE === 'PLAZA' ? 'The Suburbs' : 'Downtown';
-        sceneSwichUI.innerHTML = `
-            <div style="font-weight: bold; margin-bottom: 5px;">🚌 Bus Stop</div>
-            <div style="font-size: 12px; margin-bottom: 5px;">Press F to travel to:</div>
-            <div style="color: #88FF88;">${targetScene}</div>
-        `;
-        sceneSwichUI.style.display = 'block';
-    } else {
-        sceneSwichUI.style.display = 'none';
-    }
-};
-
-// Animation loop with time tracking for transitions
-let lastTime = 0;
-const animate = (currentTime) => {
-    requestAnimationFrame(animate);
-    
-    // Calculate delta time for smooth transitions
-    const deltaTime = (currentTime - lastTime) / 1000; // convert to seconds
-    lastTime = currentTime;
-    
-    // Update time variable for animations
-    time += 0.05;
-    
-    // Update camera position with WASD controls
-    updateCameraPosition();
-    
-    // Check for nearby NPCs for interaction
-    checkNearbyNPCs();
-    
-    // Check for bus stop proximity for scene switching
-    checkBusStopProximity();
-    
-    // Update mobile action button
-    updateMobileActionButton();
-    
-    // Update all animations
-    animateNeonSigns();
-    updateNightSky(scene, time); // Update night sky
-    updateSkybox(scene, time); // Update skybox
-    
-    // 1. Render main scene to low-res renderTarget (for pixelation)
-    renderer.setRenderTarget(renderTarget);
-    renderer.render(scene, camera);
-    
-    // 2. Prepare postMaterial for effects pass (CRT + Trails)
-    postMaterial.uniforms.tDiffuse.value = renderTarget.texture;
-    postMaterial.uniforms.tFeedback.value = postBufferB.texture; // Previous frame with trails
-    postMaterial.uniforms.u_applyEffects.value = true;
-
-    // 3. Render postScene (quad with postMaterial) into postBufferA
-    renderer.setRenderTarget(postBufferA);
-    renderer.render(postScene, postCamera);
-
-    // 4. Prepare postMaterial for simple display pass (no new effects, just show postBufferA)
-    postMaterial.uniforms.tDiffuse.value = postBufferA.texture;
-    postMaterial.uniforms.u_applyEffects.value = false; // Turn off effects for final render to screen
-
-    // 5. Render postScene to screen
-    renderer.setRenderTarget(null);
-    renderer.render(postScene, postCamera);
-
-    // 6. Swap buffers for next frame (postBufferB will hold the latest trails for feedback)
-    let temp = postBufferA;
-    postBufferA = postBufferB;
-    postBufferB = temp;
-};
-
-animate(0); 
-
-// Create the starry night sky with moon
-createNightSky(scene);
-
-// Create skybox gradient
-const skybox = createSkybox(scene, CURRENT_SCENE); 
-
-// Store camera reference for skybox following
-scene.userData.camera = camera; 
-
-
-// Make the interior and street elements accessible to the test buttons
-if (typeof setSceneReference === 'function') {
-    // Update the scene reference with the latest data
-    setSceneReference(scene);
-    // Share the elements with the scene
-    if (!scene.userData) scene.userData = {};
-    scene.userData.interiorElements = interiorElements;
-    scene.userData.streetElements = streetElements;
-}
-
-// Start the animation immediately when the page loads
+// Start the animation loop
 animate(0);
+
+console.log("✅ Suburban Adventure initialized with modular architecture!");
+
+// Debug overlay is now integrated into phone UI - no longer creating separate overlay
+

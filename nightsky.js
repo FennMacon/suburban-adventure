@@ -292,9 +292,12 @@ const createMoonGlow = (opacity = 0.3) => {
         color: 0xFFFFC0, // Yellow-white
         transparent: true,
         opacity: opacity * 1.3,
-        wireframe: false
+        wireframe: false,
+        depthWrite: false, // Prevent depth sorting issues
+        depthTest: false // Always render, even when close
     });
     const innerGlow = new THREE.Mesh(innerGlowGeometry, innerGlowMaterial);
+    innerGlow.renderOrder = 999; // Render last
     glowGroup.add(innerGlow);
     
     // Middle glow layer
@@ -303,9 +306,12 @@ const createMoonGlow = (opacity = 0.3) => {
         color: 0xE6FFFF, // Slight blue tint
         transparent: true,
         opacity: opacity * 0.7,
-        wireframe: false
+        wireframe: false,
+        depthWrite: false, // Prevent depth sorting issues
+        depthTest: false // Always render, even when close
     });
     const middleGlow = new THREE.Mesh(middleGlowGeometry, middleGlowMaterial);
+    middleGlow.renderOrder = 999; // Render last
     glowGroup.add(middleGlow);
     
     // Outer dreamy glow
@@ -314,10 +320,16 @@ const createMoonGlow = (opacity = 0.3) => {
         color: 0xDDEEFF, // Blue-white
         transparent: true,
         opacity: opacity * 0.4,
-        wireframe: false
+        wireframe: false,
+        depthWrite: false, // Prevent depth sorting issues
+        depthTest: false // Always render, even when close
     });
     const outerGlow = new THREE.Mesh(outerGlowGeometry, outerGlowMaterial);
+    outerGlow.renderOrder = 999; // Render last
     glowGroup.add(outerGlow);
+    
+    // Set render order on the group as well
+    glowGroup.renderOrder = 999;
     
     return glowGroup;
 };

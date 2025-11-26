@@ -34,9 +34,9 @@ export const SCENE_CONFIGS = {
         NEAR_SIDEWALK_Z: 2,
         STREET_Z: 11,
         FAR_SIDEWALK_Z: 20,
-        FAR_BUILDINGS_Z: 35,    // Push buildings further back for forest space
-        PARKING_LOT_Z: 65,      // Expand parking deeper into forest
-        CAMERA_START_Z: 30,     // Pull camera back to see forest
+        FAR_BUILDINGS_Z: 35,
+        PARKING_LOT_Z: 65,
+        CAMERA_START_Z: 30,
         CAMERA_TARGET_Z: 11,
         SHOP_ROW_START_X: -60,
         KARAOKE_BAR_X: 0,
@@ -47,9 +47,163 @@ export const SCENE_CONFIGS = {
         FAR_SIDEWALK_ELEMENTS: true,
         FOREST_ELEMENTS: true,
         SUBURBAN_ELEMENTS: true,
-        FEWER_BUILDINGS: true,    // Park-like with fewer buildings
-        STONE_WALL: true,         // Classic New England stone wall
-        FRONT_IS_PARK: true       // Replace shops/karaoke with park
+        FEWER_BUILDINGS: true,
+        STONE_WALL: true,
+        FRONT_IS_PARK: true
+    },
+
+    // Deep woods pond scene - post-party campfire vibes
+    POND: {
+        name: "Deep Woods Pond",
+        FRONT_SHOPS_Z: -50,
+        NEAR_SIDEWALK_Z: 2,
+        STREET_Z: 11,
+        FAR_SIDEWALK_Z: 20,
+        FAR_BUILDINGS_Z: -80,
+        PARKING_LOT_Z: 65,
+        CAMERA_START_Z: 30,
+        CAMERA_TARGET_Z: -20,
+        SHOP_ROW_START_X: -60,
+        KARAOKE_BAR_X: 0,
+        SHOP_HEIGHT: 4.5,
+        SHOP_DEPTH: 12,
+        ROAD_POSITION_X: -100,      // Move road to left side
+        NEAR_SIDEWALK_ELEMENTS: false,
+        STREET_ELEMENTS: true,
+        FAR_SIDEWALK_ELEMENTS: false,
+        FOREST_ELEMENTS: true,
+        SUBURBAN_ELEMENTS: false,
+        FEWER_BUILDINGS: false,
+        STONE_WALL: false,
+        FRONT_IS_PARK: false,
+        FRONT_IS_POND: true,        // Pond scene specific
+        CAMPFIRE_ELEMENTS: true,
+        POND_ELEMENTS: true,
+        HAUNTED_ATMOSPHERE: true
+    },
+
+    // Interior scenes - shop interiors
+    CUMBYS_INTERIOR: {
+        name: "Grumby's",
+        IS_INTERIOR: true,
+        INTERIOR_TYPE: 'convenience',
+        CAMERA_START_Z: 0,
+        CAMERA_TARGET_Z: 0,
+        EXIT_PORTAL_POSITION: { x: 0, z: 0 }
+    },
+    GROHOS_INTERIOR: {
+        name: "Grohos Pizza",
+        IS_INTERIOR: true,
+        INTERIOR_TYPE: 'pizza',
+        CAMERA_START_Z: 0,
+        CAMERA_TARGET_Z: 0,
+        EXIT_PORTAL_POSITION: { x: 0, z: 0 }
+    },
+    CLOTHING_STORE_INTERIOR: {
+        name: "Clothing Store",
+        IS_INTERIOR: true,
+        INTERIOR_TYPE: 'clothing',
+        CAMERA_START_Z: 0,
+        CAMERA_TARGET_Z: 0,
+        EXIT_PORTAL_POSITION: { x: 0, z: 0 }
+    },
+    DRYCLEANER_INTERIOR: {
+        name: "Dry Cleaners",
+        IS_INTERIOR: true,
+        INTERIOR_TYPE: 'drycleaner',
+        CAMERA_START_Z: 0,
+        CAMERA_TARGET_Z: 0,
+        EXIT_PORTAL_POSITION: { x: 0, z: 0 }
+    },
+    DUNKIN_INTERIOR: {
+        name: "Donut Galaxy",
+        IS_INTERIOR: true,
+        INTERIOR_TYPE: 'coffee',
+        CAMERA_START_Z: 0,
+        CAMERA_TARGET_Z: 0,
+        EXIT_PORTAL_POSITION: { x: 0, z: 0 }
+    },
+    FLOWER_SHOP_INTERIOR: {
+        name: "Flower Shop",
+        IS_INTERIOR: true,
+        INTERIOR_TYPE: 'flowers',
+        CAMERA_START_Z: 0,
+        CAMERA_TARGET_Z: 0,
+        EXIT_PORTAL_POSITION: { x: 0, z: 0 }
+    },
+
+    // Interior scenes - far building interiors
+    CHURCH_INTERIOR: {
+        name: "Church Interior",
+        IS_INTERIOR: true,
+        INTERIOR_TYPE: 'groton_church',
+        CAMERA_START_Z: 0,
+        CAMERA_TARGET_Z: 0,
+        EXIT_PORTAL_POSITION: { x: 0, z: 0 }
+    },
+    TOWNHALL_INTERIOR: {
+        name: "Town Hall Interior",
+        IS_INTERIOR: true,
+        INTERIOR_TYPE: 'groton_townhall',
+        CAMERA_START_Z: 0,
+        CAMERA_TARGET_Z: 0,
+        EXIT_PORTAL_POSITION: { x: 0, z: 0 }
+    },
+    HOUSE_INTERIOR: {
+        name: "Colonial House Interior",
+        IS_INTERIOR: true,
+        INTERIOR_TYPE: 'groton_colonial',
+        CAMERA_START_Z: 0,
+        CAMERA_TARGET_Z: 0,
+        EXIT_PORTAL_POSITION: { x: 0, z: 0 }
+    },
+    GRAVEYARD_INTERIOR: {
+        name: "Graveyard",
+        IS_INTERIOR: true,
+        INTERIOR_TYPE: 'graveyard',
+        CAMERA_START_Z: 0,
+        CAMERA_TARGET_Z: 0,
+        EXIT_PORTAL_POSITION: { x: 0, z: 0 }
+    },
+    HOSPITAL_INTERIOR: {
+        name: "Hospital Interior",
+        IS_INTERIOR: true,
+        INTERIOR_TYPE: 'hospital',
+        CAMERA_START_Z: 0,
+        CAMERA_TARGET_Z: 0,
+        EXIT_PORTAL_POSITION: { x: 0, z: 0 }
+    },
+    MODERN_INTERIOR: {
+        name: "Modern Building Interior",
+        IS_INTERIOR: true,
+        INTERIOR_TYPE: 'modern',
+        CAMERA_START_Z: 0,
+        CAMERA_TARGET_Z: 0,
+        EXIT_PORTAL_POSITION: { x: 0, z: 0 }
+    },
+    BRICK_INTERIOR: {
+        name: "Brick Building Interior",
+        IS_INTERIOR: true,
+        INTERIOR_TYPE: 'brick',
+        CAMERA_START_Z: 0,
+        CAMERA_TARGET_Z: 0,
+        EXIT_PORTAL_POSITION: { x: 0, z: 0 }
+    },
+    SHOP_INTERIOR: {
+        name: "Shop Interior",
+        IS_INTERIOR: true,
+        INTERIOR_TYPE: 'shop',
+        CAMERA_START_Z: 0,
+        CAMERA_TARGET_Z: 0,
+        EXIT_PORTAL_POSITION: { x: 0, z: 0 }
+    },
+    INDUSTRIAL_INTERIOR: {
+        name: "Industrial Building Interior",
+        IS_INTERIOR: true,
+        INTERIOR_TYPE: 'industrial',
+        CAMERA_START_Z: 0,
+        CAMERA_TARGET_Z: 0,
+        EXIT_PORTAL_POSITION: { x: 0, z: 0 }
     }
 };
 

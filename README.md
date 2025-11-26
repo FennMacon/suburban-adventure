@@ -19,11 +19,11 @@ Inspired by the real shopping plazas found throughout suburban Massachusetts, th
 - **Scene Switching** - Press 'F' to toggle between environments and experience different vibes
 
 ### The Plaza Layout
-- **Cumby's** - Red convenience store for snacks and drinks
+- **Grumby's** - Red convenience store for snacks and drinks
 - **Grohos (Groton House of Pizza)** - Green pizza place serving the community
 - **Clothing Store** - Blue retail shop for fashion needs
 - **Dry Cleaners** - Yellow storefront for cleaning services  
-- **Dunkin Donuts** - Orange coffee shop (essential Massachusetts establishment)
+- **Donut Galaxy** - Orange coffee shop with a cosmic donut experience
 - **Flower Shop** - Pink floral boutique
 - **Karaoke Bar** - The original blue-glowing centerpiece (kept from the original design)
 - **Background Buildings** - Randomly generated mix of modern, brick, industrial buildings, hospitals, and cemeteries
@@ -41,7 +41,7 @@ Inspired by the real shopping plazas found throughout suburban Massachusetts, th
 ### Interactive Features
 - **Character conversations** - Walk up to 5 NPCs around the plaza and press 'E' to chat
 - **Song discovery system** - Each conversation unlocks a new song/story piece
-- **Massachusetts locals** - Meet Maya (at Cumby's), Jake (at Dunkin), Alex (parking lot), Sam (behind shops), and Jordan (corner people-watcher)
+- **Massachusetts locals** - Meet Maya (at Grumby's), Jake (at Donut Galaxy), Alex (parking lot), Sam (behind shops), and Jordan (corner people-watcher)
 
 ### Future Features (Planned)
 - **Audio playback** - Actually play the unlocked songs with your friends' voices
@@ -89,7 +89,7 @@ This project captures the authentic feel of suburban Massachusetts life in two d
 
 ### Urban Plaza Mode
 The classic strip mall experience where you'd:
-- Grab a coffee at Dunkin before school/work
+- Grab a cosmic coffee at Donut Galaxy before school/work
 - Meet friends in the parking lot after hours  
 - Pick up pizza from the local House of Pizza
 - Run errands at the convenience store
