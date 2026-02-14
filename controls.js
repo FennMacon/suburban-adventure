@@ -136,7 +136,10 @@ export const updateCameraPositionMobile = (camera, PLAZA_CONFIG = null, streetEl
     const move = getMobileMovement();
     const look = getMobileLook();
 
-    camera.position.addScaledVector(forward, -move.y * speed);
+    // Push up (screen Y decreases) => move.y negative => we want forward movement.
+    // Desktop W uses addScaledVector(forward, -speed), so forward dir = -forward vector.
+    // move.y negative (push up) => use positive coefficient for -forward => move.y * speed.
+    camera.position.addScaledVector(forward, move.y * speed);
     camera.position.addScaledVector(right, move.x * speed);
 
     yaw -= look.x * 0.05;

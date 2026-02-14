@@ -96,10 +96,19 @@ export const initializeMobileControls = (callbacks = {}) => {
     document.body.appendChild(mobileActionButton);
 
     if (onAction && typeof onAction === 'function') {
-        mobileActionButton.addEventListener('click', () => {
+        let lastActionTime = 0;
+        const fireAction = () => {
+            const now = Date.now();
+            if (now - lastActionTime < 350) return;
+            lastActionTime = now;
             onAction();
             mobileActionButton.blur();
-        });
+        };
+        mobileActionButton.addEventListener('click', fireAction);
+        mobileActionButton.addEventListener('touchend', (e) => {
+            fireAction();
+            e.preventDefault();
+        }, { passive: false });
     }
 
     const findControlForTouch = (touch) => {
@@ -127,12 +136,13 @@ export const initializeMobileControls = (callbacks = {}) => {
     };
 
     const handleTouchStart = (e) => {
-        e.preventDefault();
+        let shouldPreventDefault = false;
         for (let i = 0; i < e.changedTouches.length; i++) {
             const touch = e.changedTouches[i];
             const control = findControlForTouch(touch);
 
             if (control === 'movement') {
+                shouldPreventDefault = true;
                 touchControls.joystick.active = true;
                 touchControls.joystick.touchId = touch.identifier;
                 const rect = joystickBase.getBoundingClientRect();
@@ -142,6 +152,7 @@ export const initializeMobileControls = (callbacks = {}) => {
                 touchControls.joystick.y = touch.clientY - touchControls.joystick.centerY;
                 updateJoystickPosition(joystickKnob, touchControls.joystick);
             } else if (control === 'look') {
+                shouldPreventDefault = true;
                 touchControls.lookJoystick.active = true;
                 touchControls.lookJoystick.touchId = touch.identifier;
                 const rect = lookJoystickBase.getBoundingClientRect();
@@ -152,10 +163,11 @@ export const initializeMobileControls = (callbacks = {}) => {
                 updateJoystickPosition(lookJoystickKnob, touchControls.lookJoystick);
             }
         }
+        if (shouldPreventDefault) e.preventDefault();
     };
 
     const handleTouchMove = (e) => {
-        e.preventDefault();
+        if (touchControls.joystick.active || touchControls.lookJoystick.active) e.preventDefault();
         for (let i = 0; i < e.touches.length; i++) {
             const touch = e.touches[i];
             if (touchControls.joystick.active && touch.identifier === touchControls.joystick.touchId) {
@@ -172,7 +184,7 @@ export const initializeMobileControls = (callbacks = {}) => {
     };
 
     const handleTouchEnd = (e) => {
-        e.preventDefault();
+        const hadJoystickActive = touchControls.joystick.active || touchControls.lookJoystick.active;
         for (let i = 0; i < e.changedTouches.length; i++) {
             const touch = e.changedTouches[i];
             if (touchControls.joystick.active && touch.identifier === touchControls.joystick.touchId) {
@@ -190,6 +202,7 @@ export const initializeMobileControls = (callbacks = {}) => {
                 lookJoystickKnob.style.transform = 'translate(-50%, -50%)';
             }
         }
+        if (hadJoystickActive) e.preventDefault();
     };
 
     document.addEventListener('touchstart', handleTouchStart, { passive: false });
