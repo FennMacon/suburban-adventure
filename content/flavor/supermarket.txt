@@ -1,0 +1,51 @@
+=== SUPERMARKET_SHELF ===
+NAME: Store Shelf
+ITEM: Snack
+
+A sturdy wooden shelf lined with products. The surface is smooth from years of use, and items are arranged in neat rows. Price tags hang from the front edge.
+
+=== SUPERMARKET_FRIDGE ===
+NAME: Drink Fridge
+ITEM: Soda
+
+A tall glass-fronted refrigerator filled with colorful bottles and cans. The cool air escapes in a gentle mist when you imagine opening it. Rows of energy drinks, sodas, and water bottles line the shelves, their labels bright and inviting.
+
+The fridge's glass door is slightly fogged, obscuring some of the drinks inside. Through the condensation, you can see rows of energy drinks, sodas, and water bottles arranged by type.
+
+Cool air radiates from the refrigerator. The bottles inside are organized by brand, with energy drinks on the top shelf and sodas below. A few bottles are missing, leaving gaps in the otherwise neat arrangement.
+
+=== SUPERMARKET_CHECKOUT ===
+NAME: Checkout Counter
+ITEM: Receipt
+
+A checkout counter with a worn wooden surface. The cash register sits to one side, its display screen glowing dimly. A small conveyor belt runs along the front, ready for scanning items.
+
+This checkout lane has seen countless transactions. The counter surface is smooth from years of use, and there's a small area for bagging purchases. The register's buttons are worn smooth.
+
+A standard convenience store checkout counter. The cash register displays various function buttons, and there's space for impulse purchases like gum and batteries near the register.
+
+=== SUPERMARKET_ENDCAP ===
+NAME: Endcap Display
+ITEM: Snack
+
+A promotional endcap display showcasing featured products. Brightly colored items are arranged to catch your attention as you walk down the aisle. A small price tag dangles from the top.
+
+This endcap is strategically placed at the aisle end to maximize visibility. Products are stacked in an eye-catching pyramid formation, with the most popular items at eye level.
+
+An endcap display featuring this week's specials. The products are arranged with care, their labels facing outward. Some items have small promotional stickers attached.
+
+=== SUPERMARKET_FLOOR_DISPLAY ===
+NAME: Floor Display
+ITEM: Snack
+
+A low promotional display sitting on the floor. Products are stacked in neat pyramids, creating an eye-catching arrangement. A small sign indicates these are on special.
+
+This floor display features bulk items or promotional products. The items are carefully arranged to look appealing, though some stacks have been disrupted by customers browsing.
+
+A floor display positioned to catch shoppers' attention. Products are stacked higher than usual, creating a sense of abundance. The display looks like it was recently restocked.
+
+=== SUPERMARKET_CANDY ===
+NAME: Candy Display
+ITEM: Candy Bar
+
+A colorful array of candy bars and snacks arranged in neat rows. The packaging glints under the fluorescent lights, promising sweet satisfaction. Some bars look slightly dusty, suggesting they've been here a while.

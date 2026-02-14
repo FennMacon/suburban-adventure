@@ -1,0 +1,6 @@
+=== FLOWER_SHOP_INTERIOR ===
+UNLOCKS: Bloom
+
+Elli: Petals have been wilting faster ever since the meeting about condos.
+Player: Maybe the plaza's anxious too.
+Elli: Maybe. I'm recording cooler fans and chimes so something beautiful blooms after we're gone.

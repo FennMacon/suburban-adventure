@@ -1,0 +1,4 @@
+=== CLOTHING_MIRROR ===
+NAME: Mirror
+
+A full-length mirror for trying on clothes.

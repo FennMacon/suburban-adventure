@@ -1,0 +1,48 @@
+=== CLEARING_EMPTY_CHAIR ===
+NAME: Empty Chair
+
+An empty vinyl chair. Someone was waiting here.
+
+The chair is tilted slightly, like they left in a hurry.
+
+=== CLEARING_STREET_LAMP ===
+NAME: Street Lamp
+
+A street lamp in the middle of the woods. The light never goes out.
+
+No road nearby. No sidewalk. Just the lamp and the trees.
+
+=== CLEARING_STONE_CIRCLE ===
+NAME: Ring of Stones
+
+A ring of stones. Something happened here once.
+
+No one agrees on what. No one asks.
+
+=== CLEARING_ODD_CHAIR ===
+NAME: A Chair
+
+A chair. The grass beneath it is darker than the rest.
+
+You don't ask.
+
+=== CLEARING_EMPTY_TABLE ===
+NAME: Empty Table
+
+A small table with nothing on it. One chair pulled back.
+
+Like someone stood up mid-conversation and never came back.
+
+=== CLEARING_TRAFFIC_CONE ===
+NAME: Traffic Cone
+
+A single orange cone. No construction. No road.
+
+It's just here.
+
+=== CLEARING_SHOPPING_CART ===
+NAME: Abandoned Cart
+
+An abandoned shopping cart. One wheel is bent.
+
+How did it get here?

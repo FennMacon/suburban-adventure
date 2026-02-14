@@ -1,0 +1,6 @@
+=== HOSPITAL_INTERIOR ===
+UNLOCKS: Nightshift
+
+Nurse Mel: Night shift's been extra quiet; people are processing the news.
+Player: What do they say?
+Nurse Mel: That the plaza feels like home. I'm looping monitors and whispers into a comfort track.

@@ -559,6 +559,29 @@ const animateFloatingDonuts = (scene, deltaTime) => {
     });
 };
 
+// Animate conveyor belts in dry cleaners
+const animateConveyorBelts = (scene, deltaTime) => {
+    if (!scene?.userData?.conveyorBelts) return;
+    const belts = scene.userData.conveyorBelts.filter(b => b && b.parent);
+    scene.userData.conveyorBelts = belts;
+    belts.forEach((belt) => {
+        const speed = (belt.userData.speed || 0.4) * (deltaTime || 0.016);
+        const orient = belt.userData.orientation || 'z';
+        const len = belt.userData.length || 6;
+        belt.children.forEach((child) => {
+            if (child.userData.beltOffset !== undefined) {
+                child.userData.beltOffset = (child.userData.beltOffset + speed * 0.3) % 1;
+                const t = (child.userData.beltOffset - 0.5) * (len - 0.5);
+                if (orient === 'z') {
+                    child.position.z = t;
+                } else {
+                    child.position.x = t;
+                }
+            }
+        });
+    });
+};
+
 // Animate rotating hanger systems in dry cleaners
 const animateRotatingHangerSystems = (scene, deltaTime) => {
     if (!scene || !scene.userData || !scene.userData.rotatingHangerSystems) return;
@@ -729,6 +752,11 @@ export const createAnimationLoop = (
         
         // Update camera and controls
         updateCameraPosition();
+
+        // Distance-based tree spawn/despawn (unified map only)
+        if (streetElements.unifiedMapTrees) {
+            streetElements.unifiedMapTrees.update(camera);
+        }
         
         // Update debug info
         if (updateDebugInfo) {
@@ -745,6 +773,7 @@ export const createAnimationLoop = (
         
         // Update animations
         animateFloatingDonuts(scene, deltaTime);
+        animateConveyorBelts(scene, deltaTime);
         animateRotatingHangerSystems(scene, deltaTime);
         animateCounterFlowers(scene, deltaTime);
         animateNeonSigns(streetElements);

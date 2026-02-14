@@ -1,0 +1,6 @@
+=== CLOTHING_STORE_INTERIOR ===
+UNLOCKS: Tailoring
+
+Priya: Lease termination notice showed up with this morning's deliveries.
+Player: You're really moving out?
+Priya: Eventually. But first I want a song that sounds like late-night fitting room confessions.

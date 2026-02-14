@@ -1,0 +1,23 @@
+=== PLAZA ===
+UNLOCKS: Memories
+
+Alex: Just killing time in the parking lot. This place has so many memories, you know?
+Sam: Oh totally! Like that one summer when we all learned guitar...
+Player: Sounds like you two have some stories.
+Alex: We sure do! Want to hear the song we wrote about growing up here?
+
+=== FOREST_SUBURBAN ===
+UNLOCKS: Stone Walls
+
+Sam: This old stone wall reminds me of my grandmother's property.
+Alex: Yeah, classic New England vibes. Very different from the plaza scene.
+Player: You both prefer it here? I have a crazy little guy in my attic who hurts me.
+Sam: Sometimes. We wrote a folk song about these old stone walls and family history.
+
+=== POND ===
+UNLOCKS: Pond Night
+
+Alex: This pond always feels different at night. Quieter than anywhere else.
+Sam: I know right? Everyone's gone but the vibe lingers...
+Player: You two sticking around?
+Alex: Yeah, we wrote this melancholy track about nights like this. Want to hear it?

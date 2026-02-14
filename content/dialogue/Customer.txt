@@ -1,0 +1,6 @@
+=== SHOP_INTERIOR ===
+UNLOCKS: Memory
+
+Customer: Came in for batteries, left remembering the first time I snuck out here.
+Player: Everyone's feeling it.
+Customer: Help me write 'Receipts & Reveries'? Every beep of that checkout is a beat.

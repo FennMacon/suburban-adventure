@@ -1,0 +1,6 @@
+=== INDUSTRIAL_INTERIOR ===
+UNLOCKS: Whirring
+
+Foreman Dee: Developers measured the rafters but never heard the machine room harmony.
+Player: You recorded it, right?
+Foreman Dee: Started tonight. When they swing the wrecking ball, this beat will be our protest.

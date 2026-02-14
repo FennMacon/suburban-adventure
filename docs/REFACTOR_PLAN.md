@@ -25,6 +25,9 @@ Goals: simpler structure, easier navigation, clearer separation of concerns, wit
 - **Single entry script** — index.html loads only main.js; dependencies via imports
 - **Legacy files archived** — oldmain.js, main-refactored.js, main.js.old, REORGANIZATION_*.md, NEXT_STEPS.md → `archive/`
 - **roads.js wired up** — `HORIZONTAL_BOUNDS`, `VERTICAL_BOUNDS`, `CONNECTOR_X` used in main.js and animation.js
+- **Zone scene extraction** — `createZoneScene`, `createUnifiedMapGround`, `createConnectorRoads`, `createConnectorVehicles`, `createForestElements`, `createPondForestElements`, `createStoneWall`, `createSuburbanElements` moved to `world/zone-scene.js`; main.js imports and calls `createZoneScene(scene, config, offset, key)`
+- **World constants** — `world/constants.js` with `GROUND_LAYERS`, `GROUND_COLORS`, `ZONE_SIZE`, street/connector road dimensions
+- **Interior registry** — `INTERIOR_REGISTRY` in buildings.js maps scene keys to `{ create(scene), dimensions }`; main.js uses registry lookup instead of switch
 
 ---
 

@@ -1,0 +1,27 @@
+=== DRYCLEANER_COUNTER ===
+NAME: Service Counter
+
+A blue service counter where customers drop off and pick up their dry cleaning. The surface is clean but shows signs of constant use.
+
+The counter has a small window where orders are passed through. Behind it, you can see the organized chaos of the dry cleaning operation.
+
+=== GARMENT_CONVEYOR ===
+NAME: Garment Conveyor
+
+Clothes drift slowly along the rubber belt like sleepy commuters. Garment bags and folded shirts queue patiently for their turn at the machines.
+
+The conveyor has been running so long it's developed a personality. It hums. It doesn't judge. It just carries things forward.
+
+=== LOST_AND_FOUND ===
+NAME: Lost & Found
+
+A wooden bin overflowing with items that were never claimed. A single brown loafer. Something that might be a monocle. A tag that reads 'EST. 1987 - STILL WAITING'.
+
+The bin has a certain dignity. These things have been here so long they've become part of the scenery. Someone's other glove. A cufflink. Stories without endings.
+
+=== PRESSING_TABLE ===
+NAME: Pressing Table
+
+A large pressing table where garments are ironed and steamed. The surface is covered in a clean white fabric, ready for the next item.
+
+This is where the final touches are put on cleaned garments - removing wrinkles and ensuring everything looks perfect before pickup.

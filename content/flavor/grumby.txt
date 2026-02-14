@@ -1,0 +1,69 @@
+=== GRUMBY_SHELF ===
+NAME: Store Shelf
+ITEM: Snack
+
+A sturdy wooden shelf lined with products. The surface is smooth from years of use, and items are arranged in neat rows. Price tags hang from the front edge.
+
+This shelf holds a variety of convenience store essentials. Products are organized by type, with popular items at eye level. Some items have been shifted by customers browsing.
+
+=== GRUMBY_FRIDGE ===
+NAME: Refrigerator
+ITEM: Milk
+
+A tall white refrigerator hums quietly. The glass door reveals shelves stacked with dairy products, deli meats, and fresh produce. Condensation forms on the inside of the glass.
+
+The refrigerator's fluorescent light flickers on as you imagine opening it. Rows of milk cartons, yogurt containers, and cheese packages fill the shelves. A small puddle has collected at the bottom.
+
+=== GRUMBY_ICE_CREAM ===
+NAME: Ice Cream Cooler
+ITEM: Ice Cream
+
+A horizontal cooler filled with chilled ice cream. The glass top reveals rows of ice cream cones, ice cream sandwiches, and ice cream bars. The surface is cool to the touch.
+
+This cooler keeps ice cream at the perfect temperature. You can see condensation forming on the inside of the glass, and the ice cream is arranged by type - cones, sandwiches, and bars.
+
+=== GRUMBY_MAGAZINE ===
+NAME: Magazine Rack
+ITEM: Magazine
+
+A wooden magazine rack displays an assortment of publications. Tabloids, lifestyle magazines, and local newspapers are arranged haphazardly. Some covers look slightly worn from browsing.
+
+The magazine rack is positioned near the checkout, perfect for impulse purchases. You can see celebrity gossip magazines, cooking publications, and a few local papers mixed together.
+
+=== GRUMBY_CANDY ===
+NAME: Candy Display
+ITEM: Candy Bar
+
+A colorful array of candy bars and snacks arranged in neat rows. The packaging glints under the fluorescent lights, promising sweet satisfaction. Some bars look slightly dusty, suggesting they've been here a while.
+
+Rows of brightly colored wrappers catch your eye. Chocolate bars, gummy candies, and sour treats are stacked neatly, though a few packages appear to have been opened and resealed.
+
+The candy display is a rainbow of temptation. Each wrapper promises something different - chocolate, fruit flavors, sour surprises. You notice some items are slightly askew, as if someone was browsing recently.
+
+=== GRUMBY_COFFEE_MACHINE ===
+NAME: Coffee Machine
+ITEM: Coffee
+
+A warm, glowing coffee machine sits humming quietly. The display shows various coffee options, though most of the buttons are worn smooth from years of use. A faint aroma of stale coffee grounds lingers in the air.
+
+The coffee machine's LED display flickers between different brew options. A small 'Out of Order' sign has been taped over one of the selections, but someone has scratched it off.
+
+Steam occasionally escapes from the machine's spout, and you can hear the gurgle of water heating inside. The selection buttons are sticky to the touch, suggesting frequent use.
+
+The machine hums with a low, steady vibration. Coffee stains mark the area around the spout, and a small puddle has collected on the counter beneath it.
+
+Various coffee options are displayed on a faded screen. The machine looks well-maintained, but the 'Decaf' button appears to be permanently stuck in the pressed position.
+
+=== GRUMBY_COFFEE_CORNER ===
+NAME: Coffee Corner
+ITEM: Coffee
+
+A large golden sign hangs on the wall above, marking this as the coffee corner. The area below is dedicated to coffee service, with the machine and supplies arranged neatly.
+
+You're standing beneath the coffee corner sign. The warm glow from the sign above casts a golden light on the coffee machine and cups below. The air carries a faint aroma of coffee.
+
+The coffee corner is clearly marked by the prominent sign overhead. This area feels like a small oasis in the store, dedicated entirely to caffeinated beverages and the ritual of coffee making.
+
+Beneath the glowing coffee sign, the corner is set up for self-service. The coffee machine sits ready, and you can see cups, lids, and condiments arranged for customer convenience.
+
+The coffee corner sign is impossible to miss - it's large, golden, and positioned high on the wall. The area below is organized for efficiency, with everything a customer needs within easy reach.

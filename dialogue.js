@@ -1,7 +1,8 @@
 // dialogue.js - NPC dialogue and conversation system
+import { getConversation, registerFallbackConversations } from './content-loader.js';
 
-// Conversation data for each NPC - scene-specific with back-and-forth dialogue
-export const conversations = {
+// Fallback conversation data - used when content files fail to load (e.g. file://, offline)
+const CONVERSATIONS_FALLBACK = {
     // Individual NPCs
     'Maya': {
         PLAZA: {
@@ -363,6 +364,8 @@ export const conversations = {
     }
 };
 
+registerFallbackConversations(CONVERSATIONS_FALLBACK);
+
 // Track unlocked songs and conversation state
 // Changed from Set to Map to store song metadata (NPC who unlocked it)
 export let unlockedSongs = new Map(); // Map<songName, { unlockedBy: npcName }>
@@ -425,20 +428,9 @@ loadPersistedState();
 // Function to start a conversation with an NPC
 export const startConversation = (npcName, currentScene) => {
     // Check for group conversations first
-    let conversationKey = npcName;
-    let conversationData = conversations[npcName];
-    
-    // Handle group conversations
-    if ((npcName === 'Alex' || npcName === 'Sam')) {
-        conversationKey = 'Alex & Sam';
-        conversationData = conversations['Alex & Sam'];
-    } else if ((npcName === 'Jordan' || npcName === 'Riley')) {
-        conversationKey = 'Jordan & Riley';
-        conversationData = conversations['Jordan & Riley'];
-    }
-    
-    if (conversationData && conversationData[currentScene]) {
-        currentConversation = conversationData[currentScene];
+    const conversationData = getConversation(npcName, currentScene);
+    if (conversationData) {
+        currentConversation = conversationData;
         conversationStep = 0;
         conversationAtEnd = false;
         return true;

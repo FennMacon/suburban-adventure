@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { createWireframeMaterial } from './utils.js';
 import { INTERIOR_TARGET_SIZE, createGlowingWireframeMaterial } from './buildings.js';
 import { startConversation, getCurrentDialogue, advanceConversation, hasActiveConversation, endConversation, getConversationAtEnd, setConversationAtEnd, unlockCurrentSong, getUnlockedSongs, getCurrentConversationUnlock, isSongUnlocked, markItemEncountered } from './dialogue.js';
+import { triggerPhoneGlow } from './phone-ui.js';
 import { SCENE_CONFIGS, UNIFIED_MAP, UNIFIED_MAP_ZONE_OFFSETS } from './scenes.js';
 
 const DEFAULT_NPC_COLOR = 0xFF6B9D;
@@ -63,54 +64,56 @@ const attachNPC = (
     }
 
     npcGroup.position.set(finalX, y, finalZ);
+    npcGroup.userData.zoneKey = options.zoneKey ?? null;
     parent.add(npcGroup);
     return npcGroup;
 };
 
-// Create NPCs for the scene
+// Create NPCs for the scene (zoneKey = PLAZA | FOREST_SUBURBAN | POND)
 export const createNPCs = (PLAZA_CONFIG, CURRENT_SCENE, scene) => {
     const npcs = [];
     
+    const zoneKey = CURRENT_SCENE;
     if (CURRENT_SCENE === 'PLAZA') {
         // Massachusetts Plaza positioning
-        npcs.push(attachNPC(scene, 'Maya', -20, PLAZA_CONFIG.NEAR_SIDEWALK_Z, 0xFF6B9D)); // Pink
-        npcs.push(attachNPC(scene, 'Jake', 15, PLAZA_CONFIG.NEAR_SIDEWALK_Z, 0x9D6BFF)); // Purple
+        npcs.push(attachNPC(scene, 'Maya', -20, PLAZA_CONFIG.NEAR_SIDEWALK_Z, 0xFF6B9D, 0, { zoneKey })); // Pink
+        npcs.push(attachNPC(scene, 'Jake', 15, PLAZA_CONFIG.NEAR_SIDEWALK_Z, 0x9D6BFF, 0, { zoneKey })); // Purple
         
         // Pizza guy behind the counter (interior NPC)
-        npcs.push(attachNPC(scene, 'Rex', 0, -13.5, 0xFF883B)); // Red
+        npcs.push(attachNPC(scene, 'Rex', 0, -13.5, 0xFF883B, 0, { zoneKey })); // Red
         
         // Group conversations - position NPCs close together
-        npcs.push(attachNPC(scene, 'Alex', -10, PLAZA_CONFIG.PARKING_LOT_Z, 0x6BFF9D)); // Green
-        npcs.push(attachNPC(scene, 'Sam', -8, PLAZA_CONFIG.PARKING_LOT_Z, 0x6BFFFF)); // Cyan
+        npcs.push(attachNPC(scene, 'Alex', -10, PLAZA_CONFIG.PARKING_LOT_Z, 0x6BFF9D, 0, { zoneKey })); // Green
+        npcs.push(attachNPC(scene, 'Sam', -8, PLAZA_CONFIG.PARKING_LOT_Z, 0x6BFFFF, 0, { zoneKey })); // Cyan
         
-        npcs.push(attachNPC(scene, 'Jordan', 25, PLAZA_CONFIG.PARKING_LOT_Z - 5, 0xFFFF6B)); // Yellow
-        npcs.push(attachNPC(scene, 'Riley', 27, PLAZA_CONFIG.PARKING_LOT_Z - 5, 0xFF9D6B)); // Orange
+        npcs.push(attachNPC(scene, 'Jordan', 25, PLAZA_CONFIG.PARKING_LOT_Z - 5, 0xFFFF6B, 0, { zoneKey })); // Yellow
+        npcs.push(attachNPC(scene, 'Riley', 27, PLAZA_CONFIG.PARKING_LOT_Z - 5, 0xFF9D6B, 0, { zoneKey })); // Orange
     } else if (CURRENT_SCENE === 'FOREST_SUBURBAN') {
         // Witchy guy in the gazebo
-        npcs.push(attachNPC(scene, 'Morgan', 0, -26, 0x8B008B, .25)); // Dark purple guy, elevated on gazebo platform
+        npcs.push(attachNPC(scene, 'Morgan', 0, -26, 0x8B008B, .25, { zoneKey })); // Dark purple guy, elevated on gazebo platform
         // Forest Suburban positioning
-        npcs.push(attachNPC(scene, 'Maya', -25, PLAZA_CONFIG.NEAR_SIDEWALK_Z + 1, 0xFF6B9D)); // Pink
-        npcs.push(attachNPC(scene, 'Jake', 20, PLAZA_CONFIG.NEAR_SIDEWALK_Z + 1, 0x9D6BFF)); // Purple
+        npcs.push(attachNPC(scene, 'Maya', -25, PLAZA_CONFIG.NEAR_SIDEWALK_Z + 1, 0xFF6B9D, 0, { zoneKey })); // Pink
+        npcs.push(attachNPC(scene, 'Jake', 20, PLAZA_CONFIG.NEAR_SIDEWALK_Z + 1, 0x9D6BFF, 0, { zoneKey })); // Purple
         
         // Group conversations - by the stone wall area
         const wallZ = (PLAZA_CONFIG.FAR_SIDEWALK_Z + PLAZA_CONFIG.FAR_BUILDINGS_Z) / 2;
-        npcs.push(attachNPC(scene, 'Alex', -15, wallZ - 2, 0x6BFF9D)); // Green
-        npcs.push(attachNPC(scene, 'Sam', -13, wallZ - 2, 0x6BFFFF)); // Cyan
+        npcs.push(attachNPC(scene, 'Alex', -15, wallZ - 2, 0x6BFF9D, 0, { zoneKey })); // Green
+        npcs.push(attachNPC(scene, 'Sam', -13, wallZ - 2, 0x6BFFFF, 0, { zoneKey })); // Cyan
         
-        npcs.push(attachNPC(scene, 'Jordan', 10, wallZ + 2, 0xFFFF6B)); // Yellow
-        npcs.push(attachNPC(scene, 'Riley', 12, wallZ + 2, 0xFF9D6B)); // Orange
+        npcs.push(attachNPC(scene, 'Jordan', 10, wallZ + 2, 0xFFFF6B, 0, { zoneKey })); // Yellow
+        npcs.push(attachNPC(scene, 'Riley', 12, wallZ + 2, 0xFF9D6B, 0, { zoneKey })); // Orange
     } else if (CURRENT_SCENE === 'POND') {
         // Pond scene - post-party campfire vibes
         // Around the campfire
-        npcs.push(attachNPC(scene, 'Maya', 12, -32, 0xFF6B9D)); // By fire
-        npcs.push(attachNPC(scene, 'Jake', 18, -28, 0x9D6BFF)); // On log
+        npcs.push(attachNPC(scene, 'Maya', 12, -32, 0xFF6B9D, 0, { zoneKey })); // By fire
+        npcs.push(attachNPC(scene, 'Jake', 18, -28, 0x9D6BFF, 0, { zoneKey })); // On log
         
         // By the pond
-        npcs.push(attachNPC(scene, 'Alex', -15, -55, 0x6BFF9D)); // Pond edge
-        npcs.push(attachNPC(scene, 'Sam', -12, -55, 0x6BFFFF)); // Next to Alex
+        npcs.push(attachNPC(scene, 'Alex', -15, -55, 0x6BFF9D, 0, { zoneKey })); // Pond edge
+        npcs.push(attachNPC(scene, 'Sam', -12, -55, 0x6BFFFF, 0, { zoneKey })); // Next to Alex
         
         // Ghost story teller (new NPC) - near tent
-        npcs.push(attachNPC(scene, 'Casey', 20, 110, 0xA2ABBB)); // In tent area
+        npcs.push(attachNPC(scene, 'Casey', 20, 110, 0xA2ABBB, 0, { zoneKey })); // In tent area
     }
     
     return npcs;
@@ -178,7 +181,7 @@ export const createInteriorNPCs = (CURRENT_SCENE, interiorGroup) => {
         maxZ: INTERIOR_TARGET_SIZE / 2 - 2
     };
     config.forEach(({ name, x, z, color = DEFAULT_NPC_COLOR, y = 0, clamp = true }) => {
-        const options = clamp ? { bounds } : {};
+        const options = clamp ? { bounds, zoneKey: CURRENT_SCENE } : { zoneKey: CURRENT_SCENE };
         npcs.push(attachNPC(interiorGroup, name, x, z, color, y, options));
     });
     return npcs;
@@ -413,15 +416,21 @@ export const checkBusStopProximity = (camera, PLAZA_CONFIG, CURRENT_SCENE, stree
     
     // Check bus stop if not near a building door
     if (distanceToBusStop < 5) {
-        if (UNIFIED_MAP) {
-            // In unified map, show direction hint instead of travel option
-            sceneSwitchUI.innerHTML = `
-                <div style="font-weight: bold; margin-bottom: 5px;">🚌 Bus Stop</div>
-                <div style="font-size: 12px;">Walk to explore The Suburbs (north) or The Pond (further north)</div>
-            `;
-            sceneSwitchUI.style.display = 'block';
-        } else {
-            const nextScene = getNextScene(CURRENT_SCENE);
+        const nextScene = UNIFIED_MAP
+            ? (() => {
+                let nearestZone = null;
+                let minD = Infinity;
+                streetElements?.zoneRootGroups?.forEach(zoneRoot => {
+                    const zoneConfig = SCENE_CONFIGS[zoneRoot.userData?.zoneKey] || PLAZA_CONFIG;
+                    const offset = zoneRoot.userData?.zoneOffset || { x: 0, z: 0 };
+                    const busStopPos = new THREE.Vector3(offset.x + (zoneConfig.ROAD_POSITION_X ? zoneConfig.ROAD_POSITION_X + 3 : -15), 0, offset.z + zoneConfig.NEAR_SIDEWALK_Z);
+                    const d = playerPosition.distanceTo(busStopPos);
+                    if (d < minD) { minD = d; nearestZone = zoneRoot.userData?.zoneKey; }
+                });
+                return nearestZone ? getNextScene(nearestZone) : getNextScene('PLAZA');
+            })()
+            : getNextScene(CURRENT_SCENE);
+        if (nextScene) {
             sceneSwitchUI.innerHTML = `
                 <div style="font-weight: bold; margin-bottom: 5px;">🚌 Bus Stop</div>
                 <div style="font-size: 12px; margin-bottom: 5px;">Press Space to travel to:</div>
@@ -517,27 +526,22 @@ const handleInteractionKey = (CURRENT_SCENE) => {
             let artistName = null;
             if (conversationNPC) {
                 const npcName = conversationNPC.userData.name;
-                // Check if this is part of a group conversation by looking for both NPCs
+                // Check if this is part of a group conversation by looking for both NPCs in same zone
+                const convZone = conversationNPC?.userData?.zoneKey;
                 if (npcName === 'Alex' || npcName === 'Sam') {
-                    // Check if both Alex and Sam exist in the scene (group conversation)
-                    const alexNPC = allNPCs.find(npc => npc.userData.name === 'Alex');
-                    const samNPC = allNPCs.find(npc => npc.userData.name === 'Sam');
+                    const alexNPC = allNPCs.find(npc => npc.userData.name === 'Alex' && npc.userData.zoneKey === convZone);
+                    const samNPC = allNPCs.find(npc => npc.userData.name === 'Sam' && npc.userData.zoneKey === convZone);
                     if (alexNPC && samNPC) {
-                        // Both exist, so it's a group conversation
                         artistName = 'Alex & Sam';
                     } else {
-                        // Only one exists, use single name
                         artistName = npcName;
                     }
                 } else if (npcName === 'Jordan' || npcName === 'Riley') {
-                    // Check if both Jordan and Riley exist in the scene (group conversation)
-                    const jordanNPC = allNPCs.find(npc => npc.userData.name === 'Jordan');
-                    const rileyNPC = allNPCs.find(npc => npc.userData.name === 'Riley');
+                    const jordanNPC = allNPCs.find(npc => npc.userData.name === 'Jordan' && npc.userData.zoneKey === convZone);
+                    const rileyNPC = allNPCs.find(npc => npc.userData.name === 'Riley' && npc.userData.zoneKey === convZone);
                     if (jordanNPC && rileyNPC) {
-                        // Both exist, so it's a group conversation
                         artistName = 'Jordan & Riley';
                     } else {
-                        // Only one exists, use single name
                         artistName = npcName;
                     }
                 } else {
@@ -551,6 +555,9 @@ const handleInteractionKey = (CURRENT_SCENE) => {
             if (unlockResult && unlockResult.newlyUnlocked) {
                 // Only show unlock UI if song was newly unlocked
                 const unlockedSong = unlockResult.song;
+                // Glow phone button with NPC color
+                const npcColor = conversationNPC?.userData?.color ?? DEFAULT_NPC_COLOR;
+                triggerPhoneGlow(npcColor);
                 // Hide interactionUI and show unlocked song in sceneSwitchUI style
                 interactionUI.style.display = 'none';
                 showingUnlockedSong = true; // Set flag to prevent checkBusStopProximity from hiding it
@@ -652,9 +659,9 @@ const handleInteractionKey = (CURRENT_SCENE) => {
         
         // Only check NPC if item interaction didn't handle it
         if (!showingItemFlavor && nearbyNPC) {
-            // Start new conversation
+            // Start new conversation - use NPC's zone so unified map plays correct dialogue
             const npcName = nearbyNPC.userData.name;
-            const sceneType = CURRENT_SCENE;
+            const sceneType = nearbyNPC.userData.zoneKey ?? CURRENT_SCENE;
             
             // Hide NPC name UI when conversation starts
             nearbyItemUI.style.display = 'none';
@@ -693,8 +700,11 @@ const showDialogueStep = (dialogue) => {
     let boxShadowColor = 'rgba(136, 255, 230, 0.5)'; // Default box shadow
     
     if (dialogue.speaker !== 'Player') {
-        // Look up the NPC by speaker name (for group conversations, this will find the correct NPC)
-        const speakerNPC = allNPCs.find(npc => npc.userData.name === dialogue.speaker);
+        // Look up the NPC by speaker name in same zone (for group conversations / unified map)
+        const convZone = conversationNPC?.userData?.zoneKey;
+        const speakerNPC = convZone
+            ? allNPCs.find(npc => npc.userData.name === dialogue.speaker && npc.userData.zoneKey === convZone)
+            : allNPCs.find(npc => npc.userData.name === dialogue.speaker);
         
         if (speakerNPC && speakerNPC.userData.color) {
             const npcColor = speakerNPC.userData.color;
@@ -1031,6 +1041,9 @@ export const handleItemInteractionKey = () => {
             htmlContent += `
             <div style="font-weight: bold; margin-top: 10px; text-align: center; color: #88FF88;">Got ${itemToAdd}</div>
         `;
+            // Glow phone with container color if available, else default amber for items
+            const itemColor = nearbyItem.userData.color ?? 0xFFAA00;
+            triggerPhoneGlow(itemColor);
         }
         
         interactionUI.innerHTML = htmlContent;

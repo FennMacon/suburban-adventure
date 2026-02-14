@@ -1,0 +1,6 @@
+=== DRYCLEANER_INTERIOR ===
+UNLOCKS: Promise
+
+Mr. Clean: I've lost control of the piles
+Player: They seem pretty separated to me
+Mr. Clean: This is all my laundry, I was too focused on the business and forgot to do any of my own until now, and I have so many clothes.

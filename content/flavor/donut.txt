@@ -1,0 +1,116 @@
+=== DONUT_COUNTER ===
+NAME: Coffee Counter
+
+The vibrant orange counter glows warmly in the shop's light. This is where the magic happens - where baristas craft cosmic coffee creations and serve up fresh donuts. The surface is clean but shows signs of constant use.
+
+The counter stretches across the front of the shop, separating customers from the workspace behind. It's the perfect height for placing orders and watching your drink being made. The orange color matches Donut Galaxy's signature aesthetic.
+
+=== DONUT_ESPRESSO ===
+NAME: Espresso Machine
+ITEM: Coffee
+
+A sleek black espresso machine hums quietly, ready to brew. Steam occasionally escapes from the wand, and the display shows various coffee options. The machine looks well-maintained and professional.
+
+The espresso machine's buttons are worn smooth from constant use. You can hear the gurgle of water heating inside, and a faint aroma of coffee grounds lingers in the air. This is clearly the heart of the operation.
+
+Two identical espresso machines stand ready on the counter. Their polished black surfaces reflect the warm shop lights. The machines look capable of handling even the busiest morning rush.
+
+=== DONUT_CASE ===
+NAME: Donut Display Case
+ITEM: Donut
+
+A pristine glass display case showcases an array of colorful donuts. Each one looks perfectly glazed and decorated, arranged in neat rows. The glass is spotless, allowing you to see every sprinkle and swirl of frosting.
+
+The display case glows with warm light, making the donuts inside look even more tempting. You can see various flavors - chocolate, vanilla, strawberry, and some with colorful sprinkles. They're arranged like jewels in a case.
+
+This is where the day's fresh donuts are displayed for customers. The case keeps them at the perfect temperature and protects them while still showing off their beautiful decorations. Some look like they were just made.
+
+=== DONUT_REGISTER ===
+NAME: Cash Register
+
+A modern cash register sits on the counter, its dark surface contrasting with the bright orange countertop. The screen glows with a soft cyan light, ready to ring up orders.
+
+The register's buttons are well-worn from constant use. You can see various function keys for different payment methods and order types. It looks like it's seen thousands of transactions.
+
+This is where customers pay for their cosmic coffee and donuts. The register screen displays the time and is ready for the next order. A small card reader sits nearby for contactless payments.
+
+=== DONUT_TIP_JAR ===
+NAME: Tip Jar
+
+A translucent tip jar sits on the counter, glowing softly with an aquamarine light. You can see a few coins and bills inside, left by appreciative customers.
+
+The tip jar has a simple design - just a clear cylinder with a small opening at the top. A handwritten 'Thank you!' note is taped to the side. It's positioned where customers naturally see it.
+
+Baristas rely on tips to supplement their income, and this jar is a way for customers to show appreciation. It's about half full with various denominations, suggesting the staff is well-liked.
+
+=== DONUT_RACK ===
+NAME: Donut Rack
+ITEM: Donut
+
+A massive wooden rack stretches across the back wall, displaying rows upon rows of fresh donuts and baked goods. The warm brown wood glows softly, creating a beautiful backdrop for the colorful treats.
+
+This is Donut Galaxy's main display - a three-tiered rack filled with every variety of donut imaginable. Each shelf is carefully organized, with donuts arranged by flavor and decoration. The rack dominates the back wall, making it impossible to miss.
+
+The donut rack is the centerpiece of the shop's visual appeal. Behind the cashier, it showcases the day's fresh offerings - glazed donuts, frosted varieties, and other baked goods. Customers can point to exactly what they want.
+
+A beautifully crafted wooden rack holds dozens of donuts at various heights. The warm lighting makes each donut look like a work of art. You can see sprinkles, frosting, and glazes glistening in the light.
+
+This rack is where the magic of Donut Galaxy is on full display. Three shelves are packed with fresh donuts, each one perfectly decorated. The top shelf also features muffins and croissants for customers who want something different.
+
+=== DONUT_STRAW ===
+NAME: Straw Dispenser
+
+A small dispenser holds white plastic straws, ready for customers who want to stir their drinks. The dispenser has a warm salmon-colored glow that matches the shop's aesthetic.
+
+The straw dispenser is positioned conveniently near the drink preparation area. A few straws stick out at various angles, suggesting customers have been helping themselves.
+
+Simple but essential - this dispenser ensures every iced coffee and cold drink gets a straw. The warm glow makes it easy to spot even in the busy shop environment.
+
+=== DONUT_MENU ===
+NAME: Menu Board
+
+A large black menu board hangs high on the wall, displaying Donut Galaxy's offerings. Golden lines divide the board into sections, showing various coffee drinks, donut flavors, and prices.
+
+The menu board is positioned so customers can see it while waiting in line. The dark background makes the golden text lines stand out clearly. It's clearly been updated recently, as everything looks fresh and readable.
+
+This menu board lists all of Donut Galaxy's cosmic coffee creations and donut varieties. The golden lines suggest different categories - perhaps hot drinks, iced drinks, and specialty items. It's the first thing you notice when entering.
+
+A professional menu board showcases the shop's offerings. The design is clean and easy to read, with golden accent lines that match the shop's warm aesthetic. It helps customers decide what to order before reaching the counter.
+
+The menu board glows softly against the wall, its dark surface contrasting with the bright shop interior. Golden lines create a grid pattern, suggesting different menu sections. It's positioned at the perfect height for reading while standing.
+
+=== DONUT_FLOATING ===
+NAME: Floating Donut Galaxy
+
+Above you, donuts float in a mesmerizing spiral pattern, creating a galaxy of treats. They orbit slowly, spinning and bobbing gently in the air. This is Donut Galaxy's signature feature - a cosmic display that gives the shop its name.
+
+The floating donuts form three distinct rings, each rotating at its own pace. Some spin clockwise, others counter-clockwise, creating a hypnotic dance. Sprinkles and frosting catch the light as they rotate, making the whole display sparkle.
+
+This is unlike anything you've seen in a coffee shop. Twenty-four donuts float overhead in a spiral galaxy formation, each one decorated with colorful frosting and sprinkles. They move slowly, creating a sense of wonder and magic.
+
+The floating donut galaxy is the centerpiece of Donut Galaxy's atmosphere. The donuts orbit in elegant spirals, some higher, some lower, creating depth and movement. It's both beautiful and slightly surreal - like a dream made real.
+
+You look up at the cosmic display of floating donuts. They drift in graceful orbits, their frosting glistening in the shop's warm light. The spiral pattern reminds you of a galaxy, which is exactly what the shop's name promises.
+
+=== DONUT_CONDIMENT ===
+NAME: Condiment Station
+
+A self-serve condiment station with everything you need to customize your drink. Sugar packets, creamers, stirrers, and napkins are neatly organized. The white surface is kept clean and well-stocked.
+
+This station is positioned perfectly between the counter and seating area, making it easy for customers to grab what they need after ordering. Everything is within easy reach.
+
+The condiment station has compartments for different items - sweeteners on one side, creamers in the middle, and napkins and stirrers on the other. It's clearly designed for efficiency.
+
+=== DONUT_TRASH ===
+NAME: Trash Bin
+
+A standard trash bin for disposing of cups, napkins, and other waste. It's positioned conveniently near the seating area.
+
+The bin has a foot pedal (though you can't see it) and a lid to keep odors contained. It's clearly marked for trash only.
+
+=== DONUT_RECYCLING ===
+NAME: Recycling Bin
+
+A green recycling bin for plastic cups and other recyclables. Donut Galaxy is committed to being environmentally friendly.
+
+The bin is clearly labeled with recycling symbols. It sits next to the trash bin, making it easy for customers to sort their waste.

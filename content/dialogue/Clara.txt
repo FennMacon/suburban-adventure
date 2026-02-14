@@ -1,0 +1,6 @@
+=== TOWNHALL_INTERIOR ===
+UNLOCKS: Minutes
+
+Clara: Tonight's agenda is supposed to be zoning, but everyone just wants to talk about the plaza.
+Player: Any chance to stall the bulldozers?
+Clara: If we show why it matters. Songs, stories, packed rooms like this.

@@ -1,10 +1,15 @@
 // roads.js - Road network definitions for unified map
-// Horizontal roads: move in X, z fixed per zone (extend to meet connector at x=±170)
+// Horizontal roads: move in X, z fixed per zone
 // Vertical roads: move in Z, x = -170 or 170
 
-// Shared bounds (street width 356 = ±178)
-export const HORIZONTAL_BOUNDS = { xMin: -178, xMax: 178 };
-export const VERTICAL_BOUNDS = { zMin: -450, zMax: 450 };
+// Zone street extent (PLAZA, FOREST, POND) - single source of truth for street length
+// Edit these to change how far the streets extend in X
+export const ZONE_STREET_X_MIN = -165// 150 + 15 for connector
+export const ZONE_STREET_X_MAX = 165; // 150 + 15 for connector
+export const ZONE_STREET_WIDTH = ZONE_STREET_X_MAX - ZONE_STREET_X_MIN;
+
+export const HORIZONTAL_BOUNDS = { xMin: ZONE_STREET_X_MIN, xMax: ZONE_STREET_X_MAX };
+export const VERTICAL_BOUNDS = { zMin: -500, zMax: 500 };
 export const CONNECTOR_X = { LEFT: -170, RIGHT: 170 };
 
 export const ROAD_SEGMENTS = {
@@ -12,7 +17,7 @@ export const ROAD_SEGMENTS = {
     PLAZA_STREET: {
         id: 'PLAZA_STREET',
         type: 'horizontal',
-        bounds: { xMin: -178, xMax: 178 },
+        bounds: { xMin: ZONE_STREET_X_MIN, xMax: ZONE_STREET_X_MAX },
         z: 11,
         zoneOffset: { x: 0, z: 0 },
         laneOffset: 2
@@ -20,7 +25,7 @@ export const ROAD_SEGMENTS = {
     FOREST_STREET: {
         id: 'FOREST_STREET',
         type: 'horizontal',
-        bounds: { xMin: -178, xMax: 178 },
+        bounds: { xMin: ZONE_STREET_X_MIN, xMax: ZONE_STREET_X_MAX },
         z: 11,
         zoneOffset: { x: 0, z: 333 },
         laneOffset: 2
@@ -28,7 +33,7 @@ export const ROAD_SEGMENTS = {
     POND_STREET: {
         id: 'POND_STREET',
         type: 'horizontal',
-        bounds: { xMin: -178, xMax: 178 },
+        bounds: { xMin: ZONE_STREET_X_MIN, xMax: ZONE_STREET_X_MAX },
         z: 11,
         zoneOffset: { x: 0, z: -333 },
         laneOffset: 2

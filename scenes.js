@@ -10,17 +10,30 @@ export const UNIFIED_MAP_ZONE_OFFSETS = {
     POND: { x: 0, z: -333 }
 };
 
+// Get world position for arriving at a zone's bus stop (for unified map bus travel)
+export const getBusStopArrivalPosition = (zoneKey) => {
+    const config = SCENE_CONFIGS[zoneKey];
+    const offset = UNIFIED_MAP_ZONE_OFFSETS[zoneKey] || { x: 0, z: 0 };
+    if (!config) return { x: 0, y: 2, z: 0 };
+    const busStopX = config.ROAD_POSITION_X ? config.ROAD_POSITION_X + 3 : -15;
+    return {
+        x: offset.x + busStopX,
+        y: 2,
+        z: offset.z + config.NEAR_SIDEWALK_Z + 3  // A bit back from the bus stop
+    };
+};
+
 // 9-zone grid for 1000x1000 map - ground tiles + which zones have content
 export const UNIFIED_MAP_ZONES = [
     { key: 'ZONE_SW', x: -333, z: -333, groundType: 'grass' },
     { key: 'PLAZA', x: 0, z: 0, groundType: 'concrete', config: 'PLAZA' },
-    { key: 'ZONE_SE', x: 333, z: -333, groundType: 'grass' },
+    { key: 'ZONE_SE', x: 333, z: -333, groundType: 'grass', config: 'HILL' },
     { key: 'ZONE_W', x: -333, z: 0, groundType: 'grass' },
     { key: 'FOREST_SUBURBAN', x: 0, z: 333, groundType: 'grass', config: 'FOREST_SUBURBAN' },
     { key: 'ZONE_E', x: 333, z: 0, groundType: 'grass' },
     { key: 'ZONE_NW', x: -333, z: 333, groundType: 'grass' },
     { key: 'POND', x: 0, z: -333, groundType: 'grass', config: 'POND' },
-    { key: 'ZONE_NE', x: 333, z: 333, groundType: 'grass' }
+    { key: 'ZONE_NE', x: 333, z: 333, groundType: 'grass', config: 'MANSION' }
 ];
 
 // Scene configurations for different environments
@@ -33,7 +46,7 @@ export const SCENE_CONFIGS = {
         STREET_Z: 11,
         FAR_SIDEWALK_Z: 20,
         FAR_BUILDINGS_Z: 24,
-        PARKING_LOT_Z: 53,
+        PARKING_LOT_Z: 57,  // FAR_SIDEWALK_Z + 3 + 30 + PARKING_BUFFER to avoid overlap
         CAMERA_START_Z: 21,
         CAMERA_TARGET_Z: 11,
         SHOP_ROW_START_X: -60,

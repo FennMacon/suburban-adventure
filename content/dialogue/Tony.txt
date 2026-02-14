@@ -1,0 +1,16 @@
+=== GROHOS_INTERIOR ===
+
+Tony: Behold the future dining experience! Investors want 'upscale nostalgia' and I'm giving them marble countertops and vinyl barstools.
+Tony: I just bought this place and I'm making some big changes.
+Tony: You look like someone who appreciates the finer things in life.
+Player: Cool, uh, can I get a slice?
+Tony: Oh, we don't do ordinary pizza here. I'm talking about our signature 'Diamond Crust Deluxe' - imported Italian truffles, gold leaf, and aged parmesan from a secret monastery.
+Player: That sounds... expensive?
+Tony: Only $39.99! But wait, for just $4 more per slice, I'll throw in our 'Platinum Pepperoni' upgrade - but you gotta buy the whole pie!
+Player: What if I just want a regular slice...
+Tony: Regular? My friend, let me tell you about the process!
+Tony: Each slice here gets blessed by three different Italian grandmothers before it can even enter the oven.
+Tony: It's a seven day process. You can't rush perfection!
+Player: What happened to the people who used to work here?
+Tony: They couldn't make the pizza fancy enough. We're a boutique pizza place now.
+Player: I think I'm good on pizza for now...

@@ -212,9 +212,9 @@ export const initializePhoneUI = () => {
     // Create on-screen toggle button (bottom-right corner)
     phoneButton = document.createElement('button');
     phoneButton.id = 'phone-toggle-button';
-    // Create phone outline SVG icon
+    // Create phone outline SVG icon (48x48) - invisible by default, flashes color when song/item gained
     phoneButton.innerHTML = `
-        <svg width="32" height="32" viewBox="0 0 32 32" style="stroke: white; fill: none; stroke-width: 2;">
+        <svg width="48" height="48" viewBox="0 0 32 32" style="stroke: transparent; fill: none; stroke-width: 2; transition: stroke 0.4s ease;">
             <rect x="8" y="4" width="16" height="24" rx="2" ry="2"/>
             <rect x="12" y="6" width="8" height="1" rx="0.5"/>
             <circle cx="16" cy="24" r="1.5"/>
@@ -224,8 +224,8 @@ export const initializePhoneUI = () => {
         position: fixed;
         bottom: 20px;
         right: 20px;
-        width: 32px;
-        height: 32px;
+        width: 48px;
+        height: 48px;
         background: transparent;
         border: none;
         cursor: pointer;
@@ -374,11 +374,11 @@ export const togglePhone = () => {
     }
 };
 
-// Initialize keyboard handler for '`' (backtick) key
+// Initialize keyboard handler for 'f' key
 export const initializePhoneKeyboard = () => {
     document.addEventListener('keydown', (event) => {
-        // Only handle '`' (backtick) key
-        if (event.key === '`' || event.key === 'Backquote') {
+        // Only handle 'f' key
+        if (event.key === 'f' || event.key === 'F') {
             // Don't toggle if typing in an input field
             if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
                 return;
@@ -393,5 +393,34 @@ export const initializePhoneKeyboard = () => {
 // Export function to check if phone is open
 export const getPhoneOpenState = () => {
     return isPhoneOpen;
+};
+
+let glowTimeout = null;
+
+// Hex to #RRGGBB string (hex is number e.g. 0xFF6B9D)
+const hexToCSS = (hex) => {
+    return '#' + (typeof hex === 'number' ? hex : 0xFF6B9D).toString(16).padStart(6, '0');
+};
+
+// Flash phone icon with color when song/item is gained (color = NPC/container hex)
+// Icon is invisible by default; it appears in the given color, then fades back to invisible
+export const triggerPhoneGlow = (colorHex) => {
+    if (!phoneButton) return;
+
+    const svg = phoneButton.querySelector('svg');
+    if (!svg) return;
+
+    if (glowTimeout) {
+        clearTimeout(glowTimeout);
+        glowTimeout = null;
+    }
+
+    const color = hexToCSS(typeof colorHex === 'number' ? colorHex : 0xFF6B9D);
+    svg.style.stroke = color;
+
+    glowTimeout = setTimeout(() => {
+        svg.style.stroke = 'transparent';
+        glowTimeout = null;
+    }, 2500);
 };
 

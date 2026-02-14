@@ -1,0 +1,24 @@
+=== PLAZA ===
+UNLOCKS: Consistency
+
+Maya: My band's playing tonight at the open mic! We practiced a bunch and we have a new song we're gonna play.
+Player: Hell ya! What's the song about?
+Maya: It's about the feeling of being stuck in a small town and wanting to escape. It's about the feeling of being alone and wanting to be with someone.
+Player: That sounds like all of your other songs?
+Maya: Yeah, but this one is different. It's about feeling stuck in a small town and wanting to escape. It's about being alone and wanting to be with someone.
+Player: What's it called?
+Maya: Consistency.
+
+=== FOREST_SUBURBAN ===
+UNLOCKS: Forest (acoustic)
+
+Maya: This forest setting is so peaceful compared to the busy plaza. I love coming here to think.
+Player: It does feel different here. More contemplative.
+Maya: Exactly! I wrote this acoustic song sitting by these trees. It captures that quiet suburban forest vibe perfectly.
+
+=== POND ===
+UNLOCKS: Dying Embers
+
+Maya: Everyone left like an hour ago. It's just us and the dying fire now.
+Player: Kind of eerie out here, huh?
+Maya: Yeah... I wrote this song sitting here watching the embers. It's got that haunted, late-night feeling.

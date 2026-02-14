@@ -1,0 +1,11 @@
+=== GRAVEYARD_INTERIOR ===
+UNLOCKS: Watching
+
+Player: Do you ever have shows here?
+Caretaker Mo: Dude, no. They haunt this place crazy style any time they hear anything with a rhythm. 
+Player: Maybe they like ambient?
+Caretaker Mo: ... hmm ...
+Caretaker Mo: you know I hadn't considered that
+Caretaker Mo: ... hmmmmmmmmm ...
+Ghosts: .hmmmmmmmmm.
+Player: ..hmmmmmmmmm..

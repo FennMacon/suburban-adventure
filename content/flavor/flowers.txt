@@ -1,0 +1,4 @@
+=== FLOWER_COUNTER ===
+NAME: Flower Counter
+
+The flower shop counter, full of blooms and vases.

@@ -1,6 +1,15 @@
 // buildings.js - Building creation and management
 import * as THREE from 'three';
 import { createWireframeMaterial } from './utils.js';
+import { getFlavorContent } from './content-loader.js';
+
+const assignFlavor = (obj, contentId) => {
+    const c = getFlavorContent(contentId);
+    obj.userData.isInteractive = true;
+    obj.userData.name = c.name;
+    obj.userData.flavorText = c.flavorText;
+    if (c.itemName) obj.userData.itemName = c.itemName;
+};
 
 export const INTERIOR_TARGET_SIZE = 50;
 const INTERIOR_BASE_SIZE = 50;
@@ -76,7 +85,8 @@ export const createBuildingFacade = (width, height, depth, style, signText, sign
         groton_colonial: 0xDEB887,
         groton_house: 0xA0522D,
         hospital: 0xE6E6FA,
-        graveyard: 0x2F4F4F
+        graveyard: 0x2F4F4F,
+        mansion: 0xC4B8A8
     };
     
     const roofColors = {
@@ -84,6 +94,7 @@ export const createBuildingFacade = (width, height, depth, style, signText, sign
         groton_townhall: 0x2F4F4F,
         groton_colonial: 0x8B4513,
         groton_house: 0x696969,
+        mansion: 0x2a2a2a,
         default: 0x654321
     };
     
@@ -290,6 +301,7 @@ export const createBuildingFacade = (width, height, depth, style, signText, sign
     if (style === 'groton_church' || style === 'groton_townhall' || 
         style === 'groton_colonial' || style === 'groton_house' || 
         style === 'hospital' || style === 'graveyard' ||
+        style === 'mansion' ||
         style === 'modern' || style === 'brick' || 
         style === 'shop' || style === 'industrial') {
         doorWidth = width * 0.15;
@@ -409,6 +421,22 @@ export const createBuildingFacade = (width, height, depth, style, signText, sign
         const chimneyMesh = new THREE.Mesh(chimneyGeometry, chimneyMaterial);
         chimneyMesh.position.set(width/4, height + (height * 0.6)/2, -depth/2);
         frontWallGroup.add(chimneyMesh);
+    } else if (style === 'mansion') {
+        // Grand columns and portico
+        const columnGeometry = new THREE.CylinderGeometry(0.4, 0.5, height * 0.9, 8);
+        const columnMaterial = createWireframeMaterial(0xE8E0D5);
+        const columnSpacing = width * 0.22;
+        for (let i = -1; i <= 1; i++) {
+            const col = new THREE.Mesh(columnGeometry, columnMaterial);
+            col.position.set(i * columnSpacing, height * 0.45, wallThickness / 2 + 0.35);
+            frontWallGroup.add(col);
+        }
+        // Portico roof (flat canopy over entrance)
+        const porticoGeometry = new THREE.BoxGeometry(width * 0.65, height * 0.15, depth * 0.4);
+        const porticoMaterial = createWireframeMaterial(roofColor);
+        const portico = new THREE.Mesh(porticoGeometry, porticoMaterial);
+        portico.position.set(0, height * 0.9, -depth * 0.1);
+        frontWallGroup.add(portico);
     }
     
     // Add building sign
@@ -1783,17 +1811,8 @@ export const createCumbysInterior = (scene) => {
             }
             const shelf = new THREE.Mesh(shelfGeometry, shelfMaterial);
             shelf.position.set(xPos, 1, zPos);
-            shelf.userData.isShelf = true; // Mark for product placement
-            shelf.userData.isInteractive = true;
-            shelf.userData.name = "Store Shelf";
-            shelf.userData.itemName = "Snack"; // Item you get from this object
-            shelf.userData.flavorText = [
-                "A sturdy wooden shelf lined with products. The surface is smooth from years of use, and items are arranged in neat rows. Price tags hang from the front edge.",
-                "This shelf holds a variety of convenience store essentials. Products are organized by type, with popular items at eye level. Some items have been shifted by customers browsing.",
-                "The shelf is well-stocked, though you notice a few gaps where items have been purchased. The products are arranged with their labels facing forward, making it easy to see what's available.",
-                "A standard store shelf, its wooden surface showing signs of wear. Products are stacked efficiently, maximizing the available space. You can see where items have been recently restocked.",
-                "This shelf is part of the store's main shopping area. Items are arranged to catch your attention, with colorful packaging and clear pricing. The shelf itself is functional and unadorned."
-            ];
+            shelf.userData.isShelf = true;
+            assignFlavor(shelf, 'GRUMBY_SHELF');
             interiorGroup.add(shelf);
             shelfZPositions.push({ x: xPos, z: zPos });
         }
@@ -1813,16 +1832,7 @@ export const createCumbysInterior = (scene) => {
                 const shelf = new THREE.Mesh(shelfGeometry, shelfMaterial);
                 shelf.position.set(aisleCenter - 1.5, 1, zPos);
                 shelf.userData.isShelf = true;
-                shelf.userData.isInteractive = true;
-                shelf.userData.name = "Store Shelf";
-                shelf.userData.itemName = "Snack"; // Item you get from this object
-                shelf.userData.flavorText = [
-                    "A sturdy wooden shelf lined with products. The surface is smooth from years of use, and items are arranged in neat rows. Price tags hang from the front edge.",
-                    "This shelf holds a variety of convenience store essentials. Products are organized by type, with popular items at eye level. Some items have been shifted by customers browsing.",
-                    "The shelf is well-stocked, though you notice a few gaps where items have been purchased. The products are arranged with their labels facing forward, making it easy to see what's available.",
-                    "A standard store shelf, its wooden surface showing signs of wear. Products are stacked efficiently, maximizing the available space. You can see where items have been recently restocked.",
-                    "This shelf is part of the store's main shopping area. Items are arranged to catch your attention, with colorful packaging and clear pricing. The shelf itself is functional and unadorned."
-                ];
+                assignFlavor(shelf, 'GRUMBY_SHELF');
                 interiorGroup.add(shelf);
                 shelfZPositions.push({ x: aisleCenter - 1.5, z: zPos });
             }
@@ -1836,16 +1846,7 @@ export const createCumbysInterior = (scene) => {
                 const shelf = new THREE.Mesh(shelfGeometry, shelfMaterial);
                 shelf.position.set(aisleCenter + 1.5, 1, zPos);
                 shelf.userData.isShelf = true;
-                shelf.userData.isInteractive = true;
-                shelf.userData.name = "Store Shelf";
-                shelf.userData.itemName = "Snack"; // Item you get from this object
-                shelf.userData.flavorText = [
-                    "A sturdy wooden shelf lined with products. The surface is smooth from years of use, and items are arranged in neat rows. Price tags hang from the front edge.",
-                    "This shelf holds a variety of convenience store essentials. Products are organized by type, with popular items at eye level. Some items have been shifted by customers browsing.",
-                    "The shelf is well-stocked, though you notice a few gaps where items have been purchased. The products are arranged with their labels facing forward, making it easy to see what's available.",
-                    "A standard store shelf, its wooden surface showing signs of wear. Products are stacked efficiently, maximizing the available space. You can see where items have been recently restocked.",
-                    "This shelf is part of the store's main shopping area. Items are arranged to catch your attention, with colorful packaging and clear pricing. The shelf itself is functional and unadorned."
-                ];
+                assignFlavor(shelf, 'GRUMBY_SHELF');
                 interiorGroup.add(shelf);
                 shelfZPositions.push({ x: aisleCenter + 1.5, z: zPos });
             }
@@ -1931,16 +1932,7 @@ export const createCumbysInterior = (scene) => {
     leftFridgePositions.forEach((zPos) => {
         const fridge = new THREE.Mesh(fridgeGeometry, fridgeMaterial);
         fridge.position.set(-storeWidth/2 + 1.5, 1.25, zPos);
-        fridge.userData.isInteractive = true;
-        fridge.userData.name = "Refrigerator";
-        fridge.userData.itemName = "Milk"; // Item you get from this object
-        fridge.userData.flavorText = [
-            "A tall white refrigerator hums quietly. The glass door reveals shelves stacked with dairy products, deli meats, and fresh produce. Condensation forms on the inside of the glass.",
-            "The refrigerator's fluorescent light flickers on as you imagine opening it. Rows of milk cartons, yogurt containers, and cheese packages fill the shelves. A small puddle has collected at the bottom.",
-            "Cool air escapes when you think about opening this fridge. The shelves are organized by product type - dairy on top, meats in the middle, vegetables in the crisper drawers below.",
-            "This refrigerator section is well-stocked with essentials. You can see various brands competing for space, some items pushed to the back, others prominently displayed at the front.",
-            "The refrigerator door is slightly fogged from the temperature difference. Inside, products are arranged with expiration dates facing forward, though some items look like they've been there a while."
-        ];
+        assignFlavor(fridge, 'GRUMBY_FRIDGE');
         interiorGroup.add(fridge);
     });
     
@@ -1949,16 +1941,7 @@ export const createCumbysInterior = (scene) => {
     rightFridgePositions.forEach((zPos) => {
         const fridge = new THREE.Mesh(fridgeGeometry, fridgeMaterial);
         fridge.position.set(storeWidth/2 - 1.5, 1.25, zPos);
-        fridge.userData.isInteractive = true;
-        fridge.userData.name = "Refrigerator";
-        fridge.userData.itemName = "Milk"; // Item you get from this object
-        fridge.userData.flavorText = [
-            "A tall white refrigerator hums quietly. The glass door reveals shelves stacked with dairy products, deli meats, and fresh produce. Condensation forms on the inside of the glass.",
-            "The refrigerator's fluorescent light flickers on as you imagine opening it. Rows of milk cartons, yogurt containers, and cheese packages fill the shelves. A small puddle has collected at the bottom.",
-            "Cool air escapes when you think about opening this fridge. The shelves are organized by product type - dairy on top, meats in the middle, vegetables in the crisper drawers below.",
-            "This refrigerator section is well-stocked with essentials. You can see various brands competing for space, some items pushed to the back, others prominently displayed at the front.",
-            "The refrigerator door is slightly fogged from the temperature difference. Inside, products are arranged with expiration dates facing forward, though some items look like they've been there a while."
-        ];
+        assignFlavor(fridge, 'GRUMBY_FRIDGE');
         interiorGroup.add(fridge);
     });
     
@@ -1969,34 +1952,15 @@ export const createCumbysInterior = (scene) => {
     // Left side cooler - rotated 90 degrees and moved down the wall
     const leftCooler = new THREE.Mesh(coolerGeometry, coolerMaterial);
     leftCooler.rotation.y = Math.PI / 2; // Rotate 90 degrees
-    leftCooler.position.set(-storeWidth/2 + 0.5, 1, 10); // Moved further back along the wall
-    leftCooler.userData.isInteractive = true;
-    leftCooler.userData.name = "Ice Cream Cooler";
-    leftCooler.userData.itemName = "Ice Cream"; // Item you get from this object
-    leftCooler.userData.flavorText = [
-        "A horizontal cooler filled with chilled ice cream. The glass top reveals rows of ice cream cones, ice cream sandwiches, and ice cream bars. The surface is cool to the touch.",
-        "This cooler keeps ice cream at the perfect temperature. You can see condensation forming on the inside of the glass, and the ice cream is arranged by type - cones, sandwiches, and bars.",
-        "The cooler hums softly, maintaining its cold temperature. Some ice cream cones have frost forming on their caps, suggesting they've been in there a while.",
-        "A well-organized ice cream cooler with ice cream sorted by brand and type. The glass is slightly fogged, making it hard to see everything clearly, but you can make out the colorful labels.",
-        "This cooler is positioned conveniently near the checkout area. The ice cream inside are perfectly chilled, and you notice a few empty spots where popular items used to be.",
-        "Do they need two of these?"
-    ];
+    leftCooler.position.set(-storeWidth/2 + 0.5, 1, 10);
+    assignFlavor(leftCooler, 'GRUMBY_ICE_CREAM');
     interiorGroup.add(leftCooler);
     
     // Right side cooler - rotated 90 degrees and moved down the wall
     const rightCooler = new THREE.Mesh(coolerGeometry, coolerMaterial);
     rightCooler.rotation.y = Math.PI / 2; // Rotate 90 degrees
-    rightCooler.position.set(storeWidth/2 - 0.5, 1, 10); // Moved further back along the wall
-    rightCooler.userData.isInteractive = true;
-    rightCooler.userData.name = "Ice Cream Cooler";
-    rightCooler.userData.itemName = "Ice Cream"; // Item you get from this object
-    rightCooler.userData.flavorText = [
-        "A horizontal cooler filled with chilled ice cream. The glass top reveals rows of ice cream cones, ice cream sandwiches, and ice cream bars. The surface is cool to the touch.",
-        "This cooler keeps ice cream at the perfect temperature. You can see condensation forming on the inside of the glass, and the ice cream is arranged by type - cones, sandwiches, and bars.",
-        "The cooler hums softly, maintaining its cold temperature. Some ice cream cones have frost forming on their caps, suggesting they've been in there a while.",
-        "A well-organized ice cream cooler with ice cream sorted by brand and type. The glass is slightly fogged, making it hard to see everything clearly, but you can make out the colorful labels.",
-        "This cooler is positioned conveniently near the checkout area. The ice cream inside are perfectly chilled, and you notice a few empty spots where popular items used to be."
-    ];
+    rightCooler.position.set(storeWidth/2 - 0.5, 1, 10);
+    assignFlavor(rightCooler, 'GRUMBY_ICE_CREAM');
     interiorGroup.add(rightCooler);
     
     // Magazine rack near front - moved back, rotated 90 degrees
@@ -2004,17 +1968,8 @@ export const createCumbysInterior = (scene) => {
     const magazineRackMaterial = warmGlow(0x8B4513);
     const magazineRack = new THREE.Mesh(magazineRackGeometry, magazineRackMaterial);
     magazineRack.rotation.y = Math.PI / 2; // Rotate 90 degrees
-    magazineRack.position.set(-storeWidth/2 + 0.5, 0.75, storeDepth/2 - 8); // Adjusted x position for rotation
-    magazineRack.userData.isInteractive = true;
-    magazineRack.userData.name = "Magazine Rack";
-    magazineRack.userData.itemName = "Magazine"; // Item you get from this object
-    magazineRack.userData.flavorText = [
-        "A wooden magazine rack displays an assortment of publications. Tabloids, lifestyle magazines, and local newspapers are arranged haphazardly. Some covers look slightly worn from browsing.",
-        "The magazine rack is positioned near the checkout, perfect for impulse purchases. You can see celebrity gossip magazines, cooking publications, and a few local papers mixed together.",
-        "Magazines are stacked in slots, their colorful covers catching your eye. Some issues are clearly older, their covers slightly faded from exposure to the fluorescent lights.",
-        "A classic convenience store magazine rack. The publications range from news to entertainment, with some covers featuring bold headlines designed to grab attention.",
-        "The rack holds a variety of reading material for customers waiting in line. Some magazines are perfectly aligned, while others are askew, suggesting recent browsing."
-    ];
+    magazineRack.position.set(-storeWidth/2 + 0.5, 0.75, storeDepth/2 - 8);
+    assignFlavor(magazineRack, 'GRUMBY_MAGAZINE');
     interiorGroup.add(magazineRack);
     
     // Add some magazines
@@ -2045,21 +2000,7 @@ export const createCumbysInterior = (scene) => {
         const display = new THREE.Mesh(candyDisplayGeometry, candyDisplayMaterial);
         display.rotation.y = rotation;
         display.position.set(x, candyDisplayHeight / 2, z);
-        display.userData.isInteractive = true;
-        display.userData.name = "Candy Display";
-        display.userData.itemName = "Candy Bar"; // Item you get from this object
-        display.userData.flavorText = [
-            "A colorful array of candy bars and snacks arranged in neat rows. The packaging glints under the fluorescent lights, promising sweet satisfaction. Some bars look slightly dusty, suggesting they've been here a while.",
-            "Rows of brightly colored wrappers catch your eye. Chocolate bars, gummy candies, and sour treats are stacked neatly, though a few packages appear to have been opened and resealed.",
-            "The candy display is a rainbow of temptation. Each wrapper promises something different - chocolate, fruit flavors, sour surprises. You notice some items are slightly askew, as if someone was browsing recently.",
-            "An organized chaos of sweets stretches before you. The fluorescent lights make the colorful wrappers pop, but you can't help noticing a few empty spots where popular items used to be.",
-            "The candy bars are arranged by type - chocolate on one side, fruity on the other. The display looks well-stocked, though some of the lower shelves have items that seem to have been there longer.",
-            "A warm, glowing coffee machine sits humming quietly. The display shows various coffee options, though most of the buttons are worn smooth from years of use. A faint aroma of stale coffee grounds lingers in the air.",
-            "The coffee machine's LED display flickers between different brew options. A small 'Out of Order' sign has been taped over one of the selections, but someone has scratched it off.",
-            "Steam occasionally escapes from the machine's spout, and you can hear the gurgle of water heating inside. The selection buttons are sticky to the touch, suggesting frequent use.",
-            "The machine hums with a low, steady vibration. Coffee stains mark the area around the spout, and a small puddle has collected on the counter beneath it.",
-            "Various coffee options are displayed on a faded screen. The machine looks well-maintained, but the 'Decaf' button appears to be permanently stuck in the pressed position."
-        ];
+        assignFlavor(display, 'GRUMBY_CANDY');
         interiorGroup.add(display);
         
         // Add candy items on the display
@@ -2175,16 +2116,7 @@ export const createCumbysInterior = (scene) => {
     const coffeeMachineMaterial = warmGlow(0xFFB6C1);
     const coffeeMachine = new THREE.Mesh(coffeeMachineGeometry, coffeeMachineMaterial);
     coffeeMachine.position.set(coffeeCornerX, 0.75, coffeeCornerZ);
-    coffeeMachine.userData.isInteractive = true;
-    coffeeMachine.userData.name = "Coffee Machine";
-    coffeeMachine.userData.itemName = "Coffee"; // Item you get from this object
-    coffeeMachine.userData.flavorText = [
-        "A warm, glowing coffee machine sits humming quietly. The display shows various coffee options, though most of the buttons are worn smooth from years of use. A faint aroma of stale coffee grounds lingers in the air.",
-        "The coffee machine's LED display flickers between different brew options. A small 'Out of Order' sign has been taped over one of the selections, but someone has scratched it off.",
-        "Steam occasionally escapes from the machine's spout, and you can hear the gurgle of water heating inside. The selection buttons are sticky to the touch, suggesting frequent use.",
-        "The machine hums with a low, steady vibration. Coffee stains mark the area around the spout, and a small puddle has collected on the counter beneath it.",
-        "Various coffee options are displayed on a faded screen. The machine looks well-maintained, but the 'Decaf' button appears to be permanently stuck in the pressed position."
-    ];
+    assignFlavor(coffeeMachine, 'GRUMBY_COFFEE_MACHINE');
     interiorGroup.add(coffeeMachine);
     
     // Coffee pot on top of coffee machine
@@ -2268,17 +2200,7 @@ export const createCumbysInterior = (scene) => {
         warmGlow(0x000000, 0) // Completely transparent
     );
     coffeeSignAreaMarker.position.set(storeWidth/2 - 2, 1, storeDepth/2 - 20); // Under the sign
-    coffeeSignAreaMarker.userData.isInteractive = true;
-    coffeeSignAreaMarker.userData.name = "Coffee Corner";
-    coffeeSignAreaMarker.userData.itemName = "Coffee"; // Item you get from this object
-    coffeeSignAreaMarker.userData.flavorText = [
-        "A large golden sign hangs on the wall above, marking this as the coffee corner. The area below is dedicated to coffee service, with the machine and supplies arranged neatly.",
-        "You're standing beneath the coffee corner sign. The warm glow from the sign above casts a golden light on the coffee machine and cups below. The air carries a faint aroma of coffee.",
-        "The coffee corner is clearly marked by the prominent sign overhead. This area feels like a small oasis in the store, dedicated entirely to caffeinated beverages and the ritual of coffee making.",
-        "Beneath the glowing coffee sign, the corner is set up for self-service. The coffee machine sits ready, and you can see cups, lids, and condiments arranged for customer convenience.",
-        "The coffee corner sign is impossible to miss - it's large, golden, and positioned high on the wall. The area below is organized for efficiency, with everything a customer needs within easy reach.",
-        "Standing under the coffee sign, you notice how this corner has been designed to feel welcoming. The sign's warm glow invites you to pause and enjoy a hot beverage."
-    ];
+    assignFlavor(coffeeSignAreaMarker, 'GRUMBY_COFFEE_CORNER');
     interiorGroup.add(coffeeSignAreaMarker);
     
     // Candy displays along the right wall (rotated 90 degrees)
@@ -2337,18 +2259,7 @@ export const createCumbysInterior = (scene) => {
         const xPos = startX + i * drinkFridgeWidth;
         const drinkFridge = new THREE.Mesh(drinkFridgeGeometry, drinkFridgeMaterial);
         drinkFridge.position.set(xPos, drinkFridgeHeight / 2, backWallZ);
-        drinkFridge.userData.isInteractive = true;
-        drinkFridge.userData.name = "Drink Fridge";
-        drinkFridge.userData.itemName = "Soda"; // Item you get from this object
-        drinkFridge.userData.flavorText = [
-            "A tall glass-fronted refrigerator filled with colorful bottles and cans. The cool air escapes in a gentle mist when you imagine opening it. Rows of energy drinks, sodas, and water bottles line the shelves, their labels bright and inviting.",
-            "The fridge's glass door is slightly fogged, obscuring some of the drinks inside. Through the condensation, you can see rows of energy drinks, sodas, and water bottles arranged by type.",
-            "Cool air radiates from the refrigerator. The bottles inside are organized by brand, with energy drinks on the top shelf and sodas below. A few bottles are missing, leaving gaps in the otherwise neat arrangement.",
-            "The drink fridge hums quietly, keeping its contents chilled. Colorful labels catch your eye - bright blues, reds, and greens promising refreshment. Some bottles have condensation beading on their surfaces.",
-            "Rows of drinks stretch from top to bottom. Energy drinks dominate the upper shelves, while sodas and water bottles fill the lower ones. The glass door reflects the store's fluorescent lighting, making it hard to see everything clearly.",
-            "The refrigerator is well-stocked with an impressive variety. You notice some drinks are positioned with their labels facing forward, while others are turned sideways, suggesting recent restocking.",
-            "A gentle mist escapes when you imagine opening the door. The drinks are organized by temperature zones, with the coldest items at the back. Some bottles have price stickers that don't quite match the shelf tags."
-        ];
+        assignFlavor(drinkFridge, 'SUPERMARKET_FRIDGE');
         interiorGroup.add(drinkFridge);
         
         // Each fridge gets 1, 2, or 3 base colors
@@ -2438,16 +2349,7 @@ export const createCumbysInterior = (scene) => {
     for (let i = 0; i < 3; i++) {
         const checkoutCounter = new THREE.Mesh(counterGeometry, counterMaterial);
         checkoutCounter.position.set(-8 + i * 8, 0.6, -6);
-        checkoutCounter.userData.isInteractive = true;
-        checkoutCounter.userData.name = "Checkout Counter";
-        checkoutCounter.userData.itemName = "Receipt"; // Item you get from this object
-        checkoutCounter.userData.flavorText = [
-            "A checkout counter with a worn wooden surface. The cash register sits to one side, its display screen glowing dimly. A small conveyor belt runs along the front, ready for scanning items.",
-            "This checkout lane has seen countless transactions. The counter surface is smooth from years of use, and there's a small area for bagging purchases. The register's buttons are worn smooth.",
-            "A standard convenience store checkout counter. The cash register displays various function buttons, and there's space for impulse purchases like gum and batteries near the register.",
-            "The checkout counter is positioned to face the store entrance. The cash register is an older model, its display showing the time and ready for the next transaction.",
-            "This checkout lane is equipped with a scanner and cash register. A small divider separates this lane from the next, and there's a card reader positioned for easy access."
-        ];
+        assignFlavor(checkoutCounter, 'SUPERMARKET_CHECKOUT');
         interiorGroup.add(checkoutCounter);
         
         // Cash register on each counter
@@ -2474,16 +2376,7 @@ export const createCumbysInterior = (scene) => {
         const endcap = new THREE.Mesh(endcapGeometry, endcapMaterial);
         endcap.rotation.y = rotation;
         endcap.position.set(x, 0.9, z);
-        endcap.userData.isInteractive = true;
-        endcap.userData.name = "Endcap Display";
-        endcap.userData.itemName = "Snack"; // Item you get from this object
-        endcap.userData.flavorText = [
-            "A promotional endcap display showcasing featured products. Brightly colored items are arranged to catch your attention as you walk down the aisle. A small price tag dangles from the top.",
-            "This endcap is strategically placed at the aisle end to maximize visibility. Products are stacked in an eye-catching pyramid formation, with the most popular items at eye level.",
-            "An endcap display featuring this week's specials. The products are arranged with care, their labels facing outward. Some items have small promotional stickers attached.",
-            "The endcap is a golden opportunity for impulse purchases. Products are displayed prominently, and you notice some items are positioned to create visual interest.",
-            "This endcap display changes regularly to feature different products. Currently, it's showcasing a mix of snacks and convenience items, all arranged to maximize their appeal."
-        ];
+        assignFlavor(endcap, 'SUPERMARKET_ENDCAP');
         interiorGroup.add(endcap);
         
         // Add products on endcap
@@ -2515,16 +2408,7 @@ export const createCumbysInterior = (scene) => {
     floorDisplayPositions.forEach(({ x, z }) => {
         const floorDisplay = new THREE.Mesh(floorDisplayGeometry, floorDisplayMaterial);
         floorDisplay.position.set(x, 0.15, z);
-        floorDisplay.userData.isInteractive = true;
-        floorDisplay.userData.name = "Floor Display";
-        floorDisplay.userData.itemName = "Snack"; // Item you get from this object
-        floorDisplay.userData.flavorText = [
-            "A low promotional display sitting on the floor. Products are stacked in neat pyramids, creating an eye-catching arrangement. A small sign indicates these are on special.",
-            "This floor display features bulk items or promotional products. The items are carefully arranged to look appealing, though some stacks have been disrupted by customers browsing.",
-            "A floor display positioned to catch shoppers' attention. Products are stacked higher than usual, creating a sense of abundance. The display looks like it was recently restocked.",
-            "This promotional floor display showcases items that are on sale. The products are arranged in an organized but casual way, suggesting they're meant to feel accessible.",
-            "A low-profile floor display with products stacked in an attractive formation. Some items have fallen over, and you can see where customers have picked through the selection."
-        ];
+        assignFlavor(floorDisplay, 'SUPERMARKET_FLOOR_DISPLAY');
         interiorGroup.add(floorDisplay);
         
         // Stack products on display
@@ -2936,196 +2820,288 @@ export const createShopInterior = (scene, interiorType, shopName, storeWidth = 1
             interiorGroup.add(cashRegister);
             break;
             
-        case 'drycleaner': // Dry Cleaners
+        case 'drycleaner': // Dry Cleaners - Fun, sublime, off-kilter
             // Front counter
             const dryCleanerCounterGeometry = new THREE.BoxGeometry(8, 1.2, 1.5);
             const dryCleanerCounterMaterial = warmGlow(0x4682B4);
             const dryCleanerCounter = new THREE.Mesh(dryCleanerCounterGeometry, dryCleanerCounterMaterial);
             dryCleanerCounter.position.set(0, 0.6, storeDepth/2 - 8);
-            dryCleanerCounter.userData.isInteractive = true;
-            dryCleanerCounter.userData.name = "Service Counter";
-            dryCleanerCounter.userData.flavorText = [
-                "A blue service counter where customers drop off and pick up their dry cleaning. The surface is clean but shows signs of constant use.",
-                "The counter has a small window where orders are passed through. Behind it, you can see the organized chaos of the dry cleaning operation."
-            ];
+            assignFlavor(dryCleanerCounter, 'DRYCLEANER_COUNTER');
             interiorGroup.add(dryCleanerCounter);
             
-            // =====================================================
-            // PILES OF LAUNDRY - Scattered throughout the shop
-            // =====================================================
             const laundryColors = [0xFFFFFF, 0xE6E6FA, 0xF0F8FF, 0xFFF8DC, 0xF5F5DC, 0xFFE4E1, 0xF0E68C, 0xFFB6C1, 0xE0E0E0, 0xD3D3D3];
+            const offKilterColors = [0xFF1493, 0x00CED1, 0xFFD700, 0x9370DB, 0xFF4500, 0x32CD32]; // Hawaiian, formal, weird
             
-            // Create laundry pile helper - realistic piles of UNFOLDED clothing
-            const createLaundryPile = (x, z, size = 'medium') => {
-                const pileGroup = new THREE.Group();
-                // Increased item counts for denser piles
-                const itemCount = size === 'small' ? 15 : size === 'large' ? 35 : 25;
-                // Reduced radius for denser packing
-                const pileRadius = size === 'small' ? 0.6 : size === 'large' ? 1.0 : 0.8;
+            // Create single clothing item - expanded variety including oddball items
+            const createClothingItem = (pileTheme = 'mixed') => {
+                const palette = pileTheme === 'weird' ? offKilterColors : laundryColors;
+                const color = palette[Math.floor(Math.random() * palette.length)];
+                const material = warmGlow(color, 0.2 + Math.random() * 0.25);
+                const itemType = Math.random();
+                let item, itemHeight;
                 
+                if (pileTheme === 'sockMystery') {
+                    // The eternal mystery: 1 red sock, many white
+                    const isTheRedOne = Math.random() < 0.02;
+                    const sockMat = warmGlow(isTheRedOne ? 0xDC143C : 0xF5F5F5, 0.3);
+                    const sock = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 0.2 + Math.random() * 0.1, 8), sockMat);
+                    sock.rotation.x = Math.PI / 2;
+                    item = new THREE.Group(); item.add(sock);
+                    itemHeight = 0.15;
+                } else if (pileTheme === 'formalChaos' && itemType < 0.5) {
+                    // Bow tie or ascot
+                    const formalItem = new THREE.Mesh(new THREE.BoxGeometry(0.15 + Math.random() * 0.1, 0.08, 0.2, 1, 1, 1), material);
+                    item = new THREE.Group(); item.add(formalItem);
+                    itemHeight = 0.08;
+                } else if (pileTheme === 'formalChaos' && itemType < 0.8) {
+                    // Top hat perched
+                    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, 0.05, 16), warmGlow(0x1a1a1a));
+                    const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.2, 0.25, 16), warmGlow(0x1a1a1a));
+                    crown.position.y = 0.15;
+                    item = new THREE.Group(); item.add(brim); item.add(crown);
+                    itemHeight = 0.3;
+                } else if (pileTheme === 'weddingSpill' && itemType < 0.6) {
+                    // Wedding train / flowing fabric
+                    const train = new THREE.Mesh(new THREE.BoxGeometry(0.8 + Math.random() * 0.4, 0.04, 0.5, 2, 1, 3), warmGlow(0xFFFAFA));
+                    item = new THREE.Group(); item.add(train);
+                    itemHeight = 0.08;
+                } else if (itemType < 0.35) {
+                    const shirtGroup = new THREE.Group();
+                    const body = new THREE.Mesh(new THREE.BoxGeometry(0.6 + Math.random() * 0.2, 0.1, 0.4 + Math.random() * 0.2), material);
+                    shirtGroup.add(body);
+                    const sleeve1 = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.08, 0.15), material);
+                    sleeve1.position.set(0.3, 0, 0); shirtGroup.add(sleeve1);
+                    const sleeve2 = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.08, 0.15), material);
+                    sleeve2.position.set(-0.3, 0, 0); shirtGroup.add(sleeve2);
+                    item = shirtGroup; itemHeight = 0.1;
+                } else if (itemType < 0.6) {
+                    const pantsGroup = new THREE.Group();
+                    const leg1 = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.4 + Math.random() * 0.2, 8), material);
+                    leg1.position.set(0.15, 0.2, 0); leg1.rotation.z = Math.PI / 2; pantsGroup.add(leg1);
+                    const leg2 = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.4 + Math.random() * 0.2, 8), material);
+                    leg2.position.set(-0.15, 0.2, 0); leg2.rotation.z = Math.PI / 2; pantsGroup.add(leg2);
+                    const waist = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.1, 0.1), material);
+                    waist.position.y = 0.4; pantsGroup.add(waist);
+                    item = pantsGroup; itemHeight = 0.5;
+                } else if (itemType < 0.82) {
+                    const sockGroup = new THREE.Group();
+                    const sockCount = Math.random() > 0.6 ? 2 : 1;
+                    for (let s = 0; s < sockCount; s++) {
+                        const sock = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 0.2 + Math.random() * 0.1, 8), material);
+                        sock.position.set((s - 0.5) * 0.15, 0.1, 0); sock.rotation.x = Math.PI / 2; sockGroup.add(sock);
+                    }
+                    item = sockGroup; itemHeight = 0.2;
+                } else if (itemType < 0.92) {
+                    const towelGroup = new THREE.Group();
+                    const towelBody = new THREE.Mesh(new THREE.BoxGeometry(0.5 + Math.random() * 0.3, 0.08, 0.4 + Math.random() * 0.2), material);
+                    towelGroup.add(towelBody);
+                    for (let f = 0; f < 2; f++) {
+                        const fold = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.3), material);
+                        fold.position.set((Math.random() - 0.5) * 0.4, 0.05, (Math.random() - 0.5) * 0.2);
+                        fold.rotation.z = (Math.random() - 0.5) * 0.3; towelGroup.add(fold);
+                    }
+                    item = towelGroup; itemHeight = 0.1;
+                } else {
+                    // Oddball: single glove, scarf loop, or mystery garment
+                    const oddType = Math.random();
+                    if (oddType < 0.33) {
+                        const glove = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.08, 0.12), material);
+                        item = new THREE.Group(); item.add(glove); itemHeight = 0.1;
+                    } else if (oddType < 0.66) {
+                        const scarf = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.03, 8, 16), material);
+                        item = new THREE.Group(); item.add(scarf); itemHeight = 0.2;
+                    } else {
+                        const mystery = new THREE.Mesh(new THREE.BoxGeometry(0.25 + Math.random() * 0.2, 0.06, 0.35), warmGlow(0x2F2F2F));
+                        item = new THREE.Group(); item.add(mystery); itemHeight = 0.08;
+                    }
+                }
+                return { item, itemHeight };
+            };
+            
+            const createLaundryPile = (x, z, size = 'medium', theme = 'mixed', tilt = 0) => {
+                const pileGroup = new THREE.Group();
+                const itemCount = size === 'small' ? 12 : size === 'large' ? 28 : 20;
+                const pileRadius = size === 'small' ? 0.55 : size === 'large' ? 1.0 : 0.75;
                 let currentHeight = 0;
                 
-                // Create various clothing items - ALL UNFOLDED
                 for (let i = 0; i < itemCount; i++) {
-                    const itemType = Math.random();
-                    const color = laundryColors[Math.floor(Math.random() * laundryColors.length)];
-                    const material = warmGlow(color, 0.2 + Math.random() * 0.2);
-                    
-                    let item;
-                    let itemHeight = 0;
-                    
-                    if (itemType < 0.4) {
-                        // Unfolded shirt (always unfolded)
-                        const shirtGroup = new THREE.Group();
-                        // Body
-                        const body = new THREE.Mesh(
-                            new THREE.BoxGeometry(0.6 + Math.random() * 0.2, 0.1, 0.4 + Math.random() * 0.2, 1, 1, 1),
-                            material
-                        );
-                        shirtGroup.add(body);
-                        // Sleeves
-                        const sleeve1 = new THREE.Mesh(
-                            new THREE.BoxGeometry(0.3, 0.08, 0.15, 1, 1, 1),
-                            material
-                        );
-                        sleeve1.position.set(0.3, 0, 0);
-                        shirtGroup.add(sleeve1);
-                        const sleeve2 = new THREE.Mesh(
-                            new THREE.BoxGeometry(0.3, 0.08, 0.15, 1, 1, 1),
-                            material
-                        );
-                        sleeve2.position.set(-0.3, 0, 0);
-                        shirtGroup.add(sleeve2);
-                        item = shirtGroup;
-                        itemHeight = 0.1;
-                    } else if (itemType < 0.7) {
-                        // Unfolded pants (always unfolded/hanging)
-                        const pantsGroup = new THREE.Group();
-                        const leg1 = new THREE.Mesh(
-                            new THREE.CylinderGeometry(0.08, 0.08, 0.4 + Math.random() * 0.2, 8),
-                            material
-                        );
-                        leg1.position.set(0.15, 0.2, 0);
-                        leg1.rotation.z = Math.PI / 2;
-                        pantsGroup.add(leg1);
-                        const leg2 = new THREE.Mesh(
-                            new THREE.CylinderGeometry(0.08, 0.08, 0.4 + Math.random() * 0.2, 8),
-                            material
-                        );
-                        leg2.position.set(-0.15, 0.2, 0);
-                        leg2.rotation.z = Math.PI / 2;
-                        pantsGroup.add(leg2);
-                        const waist = new THREE.Mesh(
-                            new THREE.BoxGeometry(0.3, 0.1, 0.1, 1, 1, 1),
-                            material
-                        );
-                        waist.position.y = 0.4;
-                        pantsGroup.add(waist);
-                        item = pantsGroup;
-                        itemHeight = 0.5;
-                    } else if (itemType < 0.9) {
-                        // Socks - pairs or singles
-                        const sockGroup = new THREE.Group();
-                        const sockCount = Math.random() > 0.5 ? 2 : 1;
-                        for (let s = 0; s < sockCount; s++) {
-                            const sock = new THREE.Mesh(
-                                new THREE.CylinderGeometry(0.06, 0.08, 0.2 + Math.random() * 0.1, 8),
-                                material
-                            );
-                            sock.position.set((s - 0.5) * 0.15, 0.1, 0);
-                            sock.rotation.x = Math.PI / 2;
-                            sockGroup.add(sock);
-                        }
-                        item = sockGroup;
-                        itemHeight = 0.2;
-                    } else {
-                        // Unfolded towels or other items (more 3D)
-                        const towelGroup = new THREE.Group();
-                        // Main towel body
-                        const towelBody = new THREE.Mesh(
-                            new THREE.BoxGeometry(0.5 + Math.random() * 0.3, 0.08, 0.4 + Math.random() * 0.2, 1, 1, 1),
-                            material
-                        );
-                        towelGroup.add(towelBody);
-                        // Add some folds/wrinkles
-                        for (let f = 0; f < 2; f++) {
-                            const fold = new THREE.Mesh(
-                                new THREE.BoxGeometry(0.1, 0.1, 0.3, 1, 1, 1),
-                                material
-                            );
-                            fold.position.set((Math.random() - 0.5) * 0.4, 0.05, (Math.random() - 0.5) * 0.2);
-                            fold.rotation.z = (Math.random() - 0.5) * 0.3;
-                            towelGroup.add(fold);
-                        }
-                        item = towelGroup;
-                        itemHeight = 0.1;
-                    }
-                    
-                    // Position item in pile shape (wider at bottom, narrower at top)
-                    // Calculate radius based on height - lower items spread out more
-                    const heightRatio = currentHeight / (itemCount * 0.15); // Normalize height
-                    const maxRadius = pileRadius;
-                    const minRadius = pileRadius * 0.3; // Top of pile is narrower
-                    // Lower items get full radius, higher items get smaller radius
-                    const currentRadius = maxRadius - (maxRadius - minRadius) * Math.min(heightRatio, 1);
-                    
-                    // Use weighted random distribution (more items towards center)
-                    const randomValue = Math.random();
-                    const radius = currentRadius * Math.sqrt(randomValue); // Square root for more center clustering
+                    const { item, itemHeight } = createClothingItem(theme);
+                    const heightRatio = currentHeight / (itemCount * 0.12);
+                    const maxR = pileRadius; const minR = pileRadius * 0.35;
+                    const currentRadius = maxR - (maxR - minR) * Math.min(heightRatio, 1);
+                    const radius = currentRadius * Math.sqrt(Math.random());
                     const angle = Math.random() * Math.PI * 2;
-                    
                     const itemX = Math.cos(angle) * radius;
                     const itemZ = Math.sin(angle) * radius;
                     
-                    // Random rotation (more chaotic for unfolded items)
-                    item.rotation.x = (Math.random() - 0.5) * 0.8;
+                    item.rotation.x = (Math.random() - 0.5) * 0.9 + tilt * 0.3;
                     item.rotation.y = Math.random() * Math.PI * 2;
-                    item.rotation.z = (Math.random() - 0.5) * 0.8;
+                    item.rotation.z = (Math.random() - 0.5) * 0.9;
                     
-                    // Position item - items can settle on top of each other
                     item.position.set(itemX, currentHeight + itemHeight / 2, itemZ);
                     pileGroup.add(item);
-                    
-                    // Update height for next item (very compact stacking - items settle)
-                    // Items can overlap/rest on each other, so height increases slowly
-                    currentHeight += itemHeight * (0.05 + Math.random() * 0.15);
+                    currentHeight += itemHeight * (0.05 + Math.random() * 0.18);
                 }
                 
                 pileGroup.position.set(x, 0.1, z);
                 pileGroup.rotation.y = Math.random() * Math.PI * 2;
+                pileGroup.rotation.x = tilt * 0.15; // Slight sublime tilt for some piles
                 return pileGroup;
             };
             
-            // Scatter laundry piles throughout the shop
+            // Scatter laundry piles - mix of themes and one impossibly tall pile
             const laundryPilePositions = [
-                // Front area
-                { x: -6, z: 10, size: 'medium' },
-                { x: -3, z: 12, size: 'large' },
-                { x: 3, z: 10, size: 'small' },
-                { x: 6, z: 12, size: 'medium' },
-                // Middle area
-                { x: -8, z: 0, size: 'large' },
-                { x: -4, z: -2, size: 'small' },
-                { x: 0, z: 2, size: 'medium' },
-                { x: 4, z: -1, size: 'medium' },
-                { x: 8, z: 1, size: 'small' },
-                // Back area (around rotating system)
-                { x: -10, z: -15, size: 'medium' },
-                { x: -5, z: -18, size: 'large' },
-                { x: 0, z: -16, size: 'medium' },
-                { x: 5, z: -19, size: 'small' },
-                { x: 10, z: -17, size: 'medium' },
-                // Side areas
-                { x: -18, z: 5, size: 'medium' },
-                { x: -20, z: -5, size: 'small' },
-                { x: 18, z: 3, size: 'large' },
-                { x: 20, z: -8, size: 'medium' }
+                { x: -6, z: 10, size: 'medium', theme: 'mixed' },
+                { x: -3, z: 12, size: 'large', theme: 'sockMystery' },
+                { x: 3, z: 10, size: 'small', theme: 'formalChaos' },
+                { x: 6, z: 12, size: 'medium', theme: 'weddingSpill' },
+                { x: -8, z: 0, size: 'large', theme: 'weird' },
+                { x: -4, z: -2, size: 'small', theme: 'mixed', tilt: 1 },
+                { x: 0, z: 2, size: 'medium', theme: 'formalChaos' },
+                { x: 4, z: -1, size: 'medium', theme: 'mixed' },
+                { x: 8, z: 1, size: 'small', theme: 'mixed', tilt: 0.5 },
+                { x: -10, z: -15, size: 'medium', theme: 'weddingSpill' },
+                { x: -5, z: -18, size: 'large', theme: 'sockMystery' },
+                { x: 0, z: -16, size: 'medium', theme: 'weird' },
+                { x: 5, z: -19, size: 'small', theme: 'formalChaos', tilt: 1 },
+                { x: 10, z: -17, size: 'medium', theme: 'mixed' },
+                { x: -18, z: 5, size: 'medium', theme: 'mixed' },
+                { x: -20, z: -5, size: 'small', theme: 'sockMystery' },
+                { x: 18, z: 3, size: 'large', theme: 'weird' },
+                { x: 20, z: -8, size: 'medium', theme: 'weddingSpill' }
             ];
             
-            laundryPilePositions.forEach(({ x, z, size }) => {
-                const pile = createLaundryPile(x, z, size);
-                interiorGroup.add(pile);
+            laundryPilePositions.forEach(({ x, z, size, theme = 'mixed', tilt = 0 }) => {
+                interiorGroup.add(createLaundryPile(x, z, size, theme, tilt));
             });
+            
+            // Impossibly tall "sublime" pile - narrow and precarious
+            const sublimePile = new THREE.Group();
+            const sublimeColors = [0xF0E68C, 0xFFE4E1, 0xE6E6FA];
+            for (let i = 0; i < 22; i++) {
+                const { item, itemHeight } = createClothingItem('mixed');
+                const shrink = 1 - i * 0.03;
+                item.scale.set(shrink, shrink, shrink);
+                item.position.set((Math.random() - 0.5) * 0.25, i * 0.08, (Math.random() - 0.5) * 0.25);
+                item.rotation.set((Math.random() - 0.5) * 0.5, Math.random() * Math.PI * 2, (Math.random() - 0.5) * 0.5);
+                sublimePile.add(item);
+            }
+            sublimePile.position.set(-12, 0.1, -8);
+            sublimePile.rotation.y = 0.7;
+            interiorGroup.add(sublimePile);
+            
+            // =====================================================
+            // CONVEYOR BELTS - Industrial flow of garments
+            // =====================================================
+            const createConveyorBelt = (startX, startZ, length, orientation = 'z', speed = 0.4) => {
+                const beltGroup = new THREE.Group();
+                beltGroup.userData.isConveyorBelt = true;
+                beltGroup.userData.speed = speed;
+                beltGroup.userData.orientation = orientation;
+                beltGroup.userData.length = length;
+                beltGroup.userData.keepPosition = true;
+                
+                const beltWidth = orientation === 'z' ? 2.5 : 2.5;
+                const beltDepth = orientation === 'z' ? length : 2.5;
+                const frameDepth = orientation === 'z' ? length : 2.5;
+                
+                const beltMat = warmGlow(0x404040, 0.9);
+                const belt = new THREE.Mesh(
+                    new THREE.BoxGeometry(orientation === 'z' ? beltWidth : length, 0.15, orientation === 'z' ? length : beltDepth),
+                    beltMat
+                );
+                belt.position.y = 0.5;
+                beltGroup.add(belt);
+                
+                // Rollers at ends
+                const rollerMat = warmGlow(0x606060, 0.95);
+                const rollerRadius = 0.12;
+                const rollerLength = orientation === 'z' ? beltWidth + 0.2 : length + 0.2;
+                const rollerGeo = new THREE.CylinderGeometry(rollerRadius, rollerRadius, rollerLength, 12);
+                const roller1 = new THREE.Mesh(rollerGeo, rollerMat);
+                const roller2 = new THREE.Mesh(rollerGeo, rollerMat);
+                roller1.position.set(0, 0.6, orientation === 'z' ? -length/2 : 0);
+                roller2.position.set(0, 0.6, orientation === 'z' ? length/2 : 0);
+                roller1.rotation.z = Math.PI / 2;
+                roller2.rotation.z = Math.PI / 2;
+                if (orientation === 'x') {
+                    roller1.position.x = -length/2; roller2.position.x = length/2;
+                    roller1.rotation.y = Math.PI / 2; roller2.rotation.y = Math.PI / 2;
+                }
+                beltGroup.add(roller1); beltGroup.add(roller2);
+                
+                // Items on belt - garment bags, folded shirts, etc.
+                const itemCount = 4 + Math.floor(Math.random() * 3);
+                for (let i = 0; i < itemCount; i++) {
+                    const t = (i / itemCount) * 0.7 + Math.random() * 0.15;
+                    const itemType = Math.random();
+                    let item;
+                    if (itemType < 0.5) {
+                        const bag = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.8, 0.15), warmGlow(0xE8E8E8, 0.8));
+                        item = bag;
+                    } else if (itemType < 0.8) {
+                        const { item: shirt } = createClothingItem('mixed');
+                        item = shirt; item.scale.set(0.5, 0.5, 0.5);
+                    } else {
+                        const suit = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.6, 0.2), warmGlow(laundryColors[Math.floor(Math.random() * laundryColors.length)], 0.7));
+                        item = suit;
+                    }
+                    const offset = (t - 0.5) * (length - 1);
+                    item.position.set(orientation === 'z' ? (Math.random() - 0.5) * 1.5 : offset, 0.75, orientation === 'z' ? offset : (Math.random() - 0.5) * 1.5);
+                    item.rotation.y = Math.random() * Math.PI * 2;
+                    item.userData.beltOffset = t;
+                    beltGroup.add(item);
+                }
+                
+                beltGroup.position.set(startX, 0, startZ);
+                if (orientation === 'x') beltGroup.rotation.y = Math.PI / 2;
+                return beltGroup;
+            };
+            
+            const conveyor1 = createConveyorBelt(-storeWidth/2 + 4, -storeDepth/2 + 6, 8, 'z', 0.5);
+            assignFlavor(conveyor1, 'GARMENT_CONVEYOR');
+            interiorGroup.add(conveyor1);
+            
+            const conveyor2 = createConveyorBelt(storeWidth/2 - 5, -storeDepth/2 + 12, 6, 'z', 0.35);
+            interiorGroup.add(conveyor2);
+            
+            const conveyor3 = createConveyorBelt(-5, -storeDepth/2 + 18, 6, 'x', 0.45);
+            interiorGroup.add(conveyor3);
+            
+            if (!scene.userData.conveyorBelts) scene.userData.conveyorBelts = [];
+            scene.userData.conveyorBelts.push(conveyor1, conveyor2, conveyor3);
+            
+            // Garment bags on rolling rack
+            const garmentRack = new THREE.Group();
+            garmentRack.position.set(-storeWidth/2 + 3, 0, storeDepth/2 - 15);
+            const garmentRackFrame = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.8, 2.5), warmGlow(0x696969));
+            garmentRackFrame.position.y = 0.9;
+            garmentRack.add(garmentRackFrame);
+            for (let g = 0; g < 6; g++) {
+                const bag = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.1, 0.08), warmGlow(0xE8E8E8, 0.85));
+                bag.position.set((g % 3 - 1) * 0.7, 0.3 + Math.floor(g / 3) * 0.9, (g % 3 - 1) * 0.1);
+                bag.rotation.y = (Math.random() - 0.5) * 0.3;
+                garmentRack.add(bag);
+            }
+            interiorGroup.add(garmentRack);
+            
+            // Lost & Found bin - off-kilter oddities
+            const lostAndFoundBin = new THREE.Group();
+            lostAndFoundBin.position.set(storeWidth/2 - 4, 0, 5);
+            const binBox = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.6, 0.8), warmGlow(0x8B4513, 0.8));
+            binBox.position.y = 0.3;
+            lostAndFoundBin.add(binBox);
+            const singleShoe = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.1, 0.25), warmGlow(0x2F2F2F));
+            singleShoe.position.set(0.2, 0.45, 0); singleShoe.rotation.x = 0.2;
+            lostAndFoundBin.add(singleShoe);
+            const monocle = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.02, 8, 16), warmGlow(0xC0C0C0));
+            monocle.position.set(-0.15, 0.5, 0.1);
+            lostAndFoundBin.add(monocle);
+            const mysteryTag = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.02, 0.08), warmGlow(0xFFF8DC));
+            mysteryTag.position.set(0, 0.55, -0.15);
+            lostAndFoundBin.add(mysteryTag);
+            assignFlavor(lostAndFoundBin, 'LOST_AND_FOUND');
+            interiorGroup.add(lostAndFoundBin);
             
             // =====================================================
             // ROTATING HANGER SYSTEM - Back of shop
@@ -3189,10 +3165,14 @@ export const createShopInterior = (scene, interiorType, shopName, storeWidth = 1
                     hangerBody.rotation.z = Math.PI;
                     rotatingHangerSystem.add(hangerBody);
                     
-                    // Garment on hanger (random colors)
-                    const garmentGeometry = new THREE.BoxGeometry(0.6, 1.2, 0.1);
-                    const garmentColor = laundryColors[Math.floor(Math.random() * laundryColors.length)];
+                    // Garment on hanger - mix of normal and off-kilter (wedding dress, neon tracksuit)
+                    const isOdd = j === 2 || j === 5;
+                    const garmentColor = isOdd
+                        ? (j === 2 ? 0xFFFAFA : 0x00FF88)
+                        : laundryColors[Math.floor(Math.random() * laundryColors.length)];
                     const garmentMaterial = warmGlow(garmentColor, 0.7);
+                    const garmentScale = isOdd ? (j === 2 ? 1.3 : 0.9) : 1;
+                    const garmentGeometry = new THREE.BoxGeometry(0.6 * garmentScale, 1.2 * garmentScale, 0.1);
                     const garment = new THREE.Mesh(garmentGeometry, garmentMaterial);
                     garment.position.set(
                         Math.cos(angle) * hangerOffset,
@@ -3237,11 +3217,22 @@ export const createShopInterior = (scene, interiorType, shopName, storeWidth = 1
             const pressingTable = new THREE.Mesh(pressingTableGeometry, pressingTableMaterial);
             pressingTable.position.set(-storeWidth/2 + 2, 0.6, -storeDepth/2 + 8);
             pressingTable.userData.isInteractive = true;
-            pressingTable.userData.name = "Pressing Table";
-            pressingTable.userData.flavorText = [
-                "A large pressing table where garments are ironed and steamed. The surface is covered in a clean white fabric, ready for the next item.",
-                "This is where the final touches are put on cleaned garments - removing wrinkles and ensuring everything looks perfect before pickup."
-            ];
+            
+            // Plastic wrap dispenser - slightly absurd
+            const wrapDispenser = new THREE.Group();
+            wrapDispenser.position.set(-storeWidth/2 + 3.5, 0.8, -storeDepth/2 + 7);
+            const dispenserBase = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.5, 0.3), warmGlow(0x708090));
+            dispenserBase.position.y = 0.25;
+            wrapDispenser.add(dispenserBase);
+            const wrapRoll = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.5, 12), warmGlow(0xE8E8E8, 0.9));
+            wrapRoll.rotation.z = Math.PI / 2;
+            wrapRoll.position.set(0.15, 0.6, 0);
+            wrapDispenser.add(wrapRoll);
+            const danglingWrap = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.8, 0.3), warmGlow(0xF5F5F5, 0.6));
+            danglingWrap.position.set(0.35, 0.2, 0);
+            wrapDispenser.add(danglingWrap);
+            interiorGroup.add(wrapDispenser);
+            assignFlavor(pressingTable, 'PRESSING_TABLE');
             interiorGroup.add(pressingTable);
             break;
             
@@ -3251,13 +3242,7 @@ export const createShopInterior = (scene, interiorType, shopName, storeWidth = 1
             const coffeeCounterMaterial = warmGlow(0xFF4500); // Donut Galaxy signature orange
             const coffeeCounter = new THREE.Mesh(coffeeCounterGeometry, coffeeCounterMaterial);
             coffeeCounter.position.set(0, 0.6, -storeDepth/2 + 10);
-            coffeeCounter.userData.isInteractive = true;
-            coffeeCounter.userData.name = "Coffee Counter";
-            coffeeCounter.userData.flavorText = [
-                "The vibrant orange counter glows warmly in the shop's light. This is where the magic happens - where baristas craft cosmic coffee creations and serve up fresh donuts. The surface is clean but shows signs of constant use.",
-                "The counter stretches across the front of the shop, separating customers from the workspace behind. It's the perfect height for placing orders and watching your drink being made. The orange color matches Donut Galaxy's signature aesthetic.",
-                "A well-worn counter that's seen countless morning rushes and late-night coffee runs. The orange finish catches the light, making the whole area feel warm and inviting. You can almost smell the coffee brewing."
-            ];
+            assignFlavor(coffeeCounter, 'DONUT_COUNTER');
             interiorGroup.add(coffeeCounter);
             
             // Coffee machines on counter
@@ -3266,14 +3251,7 @@ export const createShopInterior = (scene, interiorType, shopName, storeWidth = 1
             for (let i = 0; i < 2; i++) {
                 const coffeeMachine = new THREE.Mesh(coffeeMachineGeometry, coffeeMachineMaterial);
                 coffeeMachine.position.set(-3 + i * 6, 1.35, -storeDepth/2 + 10);
-                coffeeMachine.userData.isInteractive = true;
-                coffeeMachine.userData.name = "Espresso Machine";
-                coffeeMachine.userData.itemName = "Coffee";
-                coffeeMachine.userData.flavorText = [
-                    "A sleek black espresso machine hums quietly, ready to brew. Steam occasionally escapes from the wand, and the display shows various coffee options. The machine looks well-maintained and professional.",
-                    "The espresso machine's buttons are worn smooth from constant use. You can hear the gurgle of water heating inside, and a faint aroma of coffee grounds lingers in the air. This is clearly the heart of the operation.",
-                    "Two identical espresso machines stand ready on the counter. Their polished black surfaces reflect the warm shop lights. The machines look capable of handling even the busiest morning rush."
-                ];
+                assignFlavor(coffeeMachine, 'DONUT_ESPRESSO');
                 interiorGroup.add(coffeeMachine);
             }
             
@@ -3282,14 +3260,7 @@ export const createShopInterior = (scene, interiorType, shopName, storeWidth = 1
             const donutCaseMaterial = warmGlow(0xFFFFFF);
             const donutCase = new THREE.Mesh(donutCaseGeometry, donutCaseMaterial);
             donutCase.position.set(0, 0.75, -storeDepth/2 + 10);
-            donutCase.userData.isInteractive = true;
-            donutCase.userData.name = "Donut Display Case";
-            donutCase.userData.itemName = "Donut";
-            donutCase.userData.flavorText = [
-                "A pristine glass display case showcases an array of colorful donuts. Each one looks perfectly glazed and decorated, arranged in neat rows. The glass is spotless, allowing you to see every sprinkle and swirl of frosting.",
-                "The display case glows with warm light, making the donuts inside look even more tempting. You can see various flavors - chocolate, vanilla, strawberry, and some with colorful sprinkles. They're arranged like jewels in a case.",
-                "This is where the day's fresh donuts are displayed for customers. The case keeps them at the perfect temperature and protects them while still showing off their beautiful decorations. Some look like they were just made."
-            ];
+            assignFlavor(donutCase, 'DONUT_CASE');
             interiorGroup.add(donutCase);
 
             // Countertop details - moved forward with counter
@@ -3297,13 +3268,7 @@ export const createShopInterior = (scene, interiorType, shopName, storeWidth = 1
             const registerMaterial = warmGlow(0x2F2F2F, 0.9);
             const register = new THREE.Mesh(registerGeometry, registerMaterial);
             register.position.set(-1.6, 1.0, -storeDepth/2 + 9.7);
-            register.userData.isInteractive = true;
-            register.userData.name = "Cash Register";
-            register.userData.flavorText = [
-                "A modern cash register sits on the counter, its dark surface contrasting with the bright orange countertop. The screen glows with a soft cyan light, ready to ring up orders.",
-                "The register's buttons are well-worn from constant use. You can see various function keys for different payment methods and order types. It looks like it's seen thousands of transactions.",
-                "This is where customers pay for their cosmic coffee and donuts. The register screen displays the time and is ready for the next order. A small card reader sits nearby for contactless payments."
-            ];
+            assignFlavor(register, 'DONUT_REGISTER');
             interiorGroup.add(register);
 
             const registerScreenGeometry = new THREE.PlaneGeometry(0.7, 0.45);
@@ -3316,25 +3281,13 @@ export const createShopInterior = (scene, interiorType, shopName, storeWidth = 1
             const tipJarMaterial = warmGlow(0x7FFFD4, 0.3);
             const tipJar = new THREE.Mesh(tipJarGeometry, tipJarMaterial);
             tipJar.position.set(-0.5, 0.95, -storeDepth/2 + 9.7);
-            tipJar.userData.isInteractive = true;
-            tipJar.userData.name = "Tip Jar";
-            tipJar.userData.flavorText = [
-                "A translucent tip jar sits on the counter, glowing softly with an aquamarine light. You can see a few coins and bills inside, left by appreciative customers.",
-                "The tip jar has a simple design - just a clear cylinder with a small opening at the top. A handwritten 'Thank you!' note is taped to the side. It's positioned where customers naturally see it.",
-                "Baristas rely on tips to supplement their income, and this jar is a way for customers to show appreciation. It's about half full with various denominations, suggesting the staff is well-liked."
-            ];
+            assignFlavor(tipJar, 'DONUT_TIP_JAR');
             interiorGroup.add(tipJar);
 
             const strawDispenserGeometry = new THREE.BoxGeometry(0.35, 0.45, 0.35);
             const strawDispenser = new THREE.Mesh(strawDispenserGeometry, warmGlow(0xFFA07A, 0.8));
             strawDispenser.position.set(1.8, 0.95, -storeDepth/2 + 9.7);
-            strawDispenser.userData.isInteractive = true;
-            strawDispenser.userData.name = "Straw Dispenser";
-            strawDispenser.userData.flavorText = [
-                "A small dispenser holds white plastic straws, ready for customers who want to stir their drinks. The dispenser has a warm salmon-colored glow that matches the shop's aesthetic.",
-                "The straw dispenser is positioned conveniently near the drink preparation area. A few straws stick out at various angles, suggesting customers have been helping themselves.",
-                "Simple but essential - this dispenser ensures every iced coffee and cold drink gets a straw. The warm glow makes it easy to spot even in the busy shop environment."
-            ];
+            assignFlavor(strawDispenser, 'DONUT_STRAW');
             interiorGroup.add(strawDispenser);
 
             const strawBundleGeometry = new THREE.CylinderGeometry(0.05, 0.05, 0.4, 8);
@@ -3387,16 +3340,7 @@ export const createShopInterior = (scene, interiorType, shopName, storeWidth = 1
             const rackFrameMaterial = warmGlow(0x8B4513, 0.8); // Brown wood
             const rackFrame = new THREE.Mesh(rackFrameGeometry, rackFrameMaterial);
             rackFrame.position.set(0, rackHeight / 2, -storeDepth/2 + 1);
-            rackFrame.userData.isInteractive = true;
-            rackFrame.userData.name = "Donut Rack";
-            rackFrame.userData.itemName = "Donut";
-            rackFrame.userData.flavorText = [
-                "A massive wooden rack stretches across the back wall, displaying rows upon rows of fresh donuts and baked goods. The warm brown wood glows softly, creating a beautiful backdrop for the colorful treats.",
-                "This is Donut Galaxy's main display - a three-tiered rack filled with every variety of donut imaginable. Each shelf is carefully organized, with donuts arranged by flavor and decoration. The rack dominates the back wall, making it impossible to miss.",
-                "The donut rack is the centerpiece of the shop's visual appeal. Behind the cashier, it showcases the day's fresh offerings - glazed donuts, frosted varieties, and other baked goods. Customers can point to exactly what they want.",
-                "A beautifully crafted wooden rack holds dozens of donuts at various heights. The warm lighting makes each donut look like a work of art. You can see sprinkles, frosting, and glazes glistening in the light.",
-                "This rack is where the magic of Donut Galaxy is on full display. Three shelves are packed with fresh donuts, each one perfectly decorated. The top shelf also features muffins and croissants for customers who want something different."
-            ];
+            assignFlavor(rackFrame, 'DONUT_RACK');
             interiorGroup.add(rackFrame);
             
             // Shelves inside rack
@@ -3466,15 +3410,7 @@ export const createShopInterior = (scene, interiorType, shopName, storeWidth = 1
             const menuBoardGeometry = new THREE.BoxGeometry(10, 5.2, 0.2, 3, 4, 3);
             const menuBoard = new THREE.Mesh(menuBoardGeometry, warmGlow(0x1E1E1E, 0.8));
             menuBoard.position.set(0, 6.9, -storeDepth/2 + 0.2);
-            menuBoard.userData.isInteractive = true;
-            menuBoard.userData.name = "Menu Board";
-            menuBoard.userData.flavorText = [
-                "A large black menu board hangs high on the wall, displaying Donut Galaxy's offerings. Golden lines divide the board into sections, showing various coffee drinks, donut flavors, and prices.",
-                "The menu board is positioned so customers can see it while waiting in line. The dark background makes the golden text lines stand out clearly. It's clearly been updated recently, as everything looks fresh and readable.",
-                "This menu board lists all of Donut Galaxy's cosmic coffee creations and donut varieties. The golden lines suggest different categories - perhaps hot drinks, iced drinks, and specialty items. It's the first thing you notice when entering.",
-                "A professional menu board showcases the shop's offerings. The design is clean and easy to read, with golden accent lines that match the shop's warm aesthetic. It helps customers decide what to order before reaching the counter.",
-                "The menu board glows softly against the wall, its dark surface contrasting with the bright shop interior. Golden lines create a grid pattern, suggesting different menu sections. It's positioned at the perfect height for reading while standing."
-            ];
+            assignFlavor(menuBoard, 'DONUT_MENU');
             interiorGroup.add(menuBoard);
 
             const menuLineGeometry = new THREE.BoxGeometry(9.6, 0.05, 0.04);
@@ -3664,15 +3600,7 @@ export const createShopInterior = (scene, interiorType, shopName, storeWidth = 1
             }
 
             donutCircleGroup.userData.isFloatingDonutCircle = true;
-            donutCircleGroup.userData.isInteractive = true;
-            donutCircleGroup.userData.name = "Floating Donut Galaxy";
-            donutCircleGroup.userData.flavorText = [
-                "Above you, donuts float in a mesmerizing spiral pattern, creating a galaxy of treats. They orbit slowly, spinning and bobbing gently in the air. This is Donut Galaxy's signature feature - a cosmic display that gives the shop its name.",
-                "The floating donuts form three distinct rings, each rotating at its own pace. Some spin clockwise, others counter-clockwise, creating a hypnotic dance. Sprinkles and frosting catch the light as they rotate, making the whole display sparkle.",
-                "This is unlike anything you've seen in a coffee shop. Twenty-four donuts float overhead in a spiral galaxy formation, each one decorated with colorful frosting and sprinkles. They move slowly, creating a sense of wonder and magic.",
-                "The floating donut galaxy is the centerpiece of Donut Galaxy's atmosphere. The donuts orbit in elegant spirals, some higher, some lower, creating depth and movement. It's both beautiful and slightly surreal - like a dream made real.",
-                "You look up at the cosmic display of floating donuts. They drift in graceful orbits, their frosting glistening in the shop's warm light. The spiral pattern reminds you of a galaxy, which is exactly what the shop's name promises."
-            ];
+            assignFlavor(donutCircleGroup, 'DONUT_FLOATING');
             interiorGroup.add(donutCircleGroup);
 
             if (!scene.userData) {
@@ -3792,13 +3720,7 @@ export const createShopInterior = (scene, interiorType, shopName, storeWidth = 1
             const coffeeCondimentStationMaterial = warmGlow(0xFFFFFF, 0.9);
             const coffeeCondimentStation = new THREE.Mesh(coffeeCondimentStationGeometry, coffeeCondimentStationMaterial);
             coffeeCondimentStation.position.set(0, 0.5, -storeDepth/2 + 15);
-            coffeeCondimentStation.userData.isInteractive = true;
-            coffeeCondimentStation.userData.name = "Condiment Station";
-            coffeeCondimentStation.userData.flavorText = [
-                "A self-serve condiment station with everything you need to customize your drink. Sugar packets, creamers, stirrers, and napkins are neatly organized. The white surface is kept clean and well-stocked.",
-                "This station is positioned perfectly between the counter and seating area, making it easy for customers to grab what they need after ordering. Everything is within easy reach.",
-                "The condiment station has compartments for different items - sweeteners on one side, creamers in the middle, and napkins and stirrers on the other. It's clearly designed for efficiency."
-            ];
+            assignFlavor(coffeeCondimentStation, 'DONUT_CONDIMENT');
             interiorGroup.add(coffeeCondimentStation);
             
             // Condiment containers
@@ -3832,22 +3754,12 @@ export const createShopInterior = (scene, interiorType, shopName, storeWidth = 1
             
             const trashBin = new THREE.Mesh(trashBinGeometry, trashBinMaterial);
             trashBin.position.set(-storeWidth/2 + 3, 0.6, -storeDepth/2 + 15);
-            trashBin.userData.isInteractive = true;
-            trashBin.userData.name = "Trash Bin";
-            trashBin.userData.flavorText = [
-                "A standard trash bin for disposing of cups, napkins, and other waste. It's positioned conveniently near the seating area.",
-                "The bin has a foot pedal (though you can't see it) and a lid to keep odors contained. It's clearly marked for trash only."
-            ];
+            assignFlavor(trashBin, 'DONUT_TRASH');
             interiorGroup.add(trashBin);
             
             const recyclingBin = new THREE.Mesh(recyclingBinGeometry, recyclingBinMaterial);
             recyclingBin.position.set(-storeWidth/2 + 4.5, 0.6, -storeDepth/2 + 15);
-            recyclingBin.userData.isInteractive = true;
-            recyclingBin.userData.name = "Recycling Bin";
-            recyclingBin.userData.flavorText = [
-                "A green recycling bin for plastic cups and other recyclables. Donut Galaxy is committed to being environmentally friendly.",
-                "The bin is clearly labeled with recycling symbols. It sits next to the trash bin, making it easy for customers to sort their waste."
-            ];
+            assignFlavor(recyclingBin, 'DONUT_RECYCLING');
             interiorGroup.add(recyclingBin);
             
             // =====================================================
@@ -6053,4 +5965,68 @@ export const createGraveyardInterior = (scene) => {
     scene.add(interiorGroup);
     console.log("⚰️ Created Graveyard interior");
     return interiorGroup;
+};
+
+// Interior registry: map scene key → { create(scene), dimensions }
+export const INTERIOR_REGISTRY = {
+    CUMBYS_INTERIOR: {
+        create: (scene) => createCumbysInterior(scene),
+        dimensions: { width: INTERIOR_TARGET_SIZE, depth: INTERIOR_TARGET_SIZE }
+    },
+    GROHOS_INTERIOR: {
+        create: (scene) => createShopInterior(scene, 'pizza', 'Grohos Pizza', INTERIOR_TARGET_SIZE, INTERIOR_TARGET_SIZE),
+        dimensions: { width: INTERIOR_TARGET_SIZE, depth: INTERIOR_TARGET_SIZE }
+    },
+    CLOTHING_STORE_INTERIOR: {
+        create: (scene) => createShopInterior(scene, 'clothing', 'Clothing Store', INTERIOR_TARGET_SIZE, INTERIOR_TARGET_SIZE),
+        dimensions: { width: INTERIOR_TARGET_SIZE, depth: INTERIOR_TARGET_SIZE }
+    },
+    DRYCLEANER_INTERIOR: {
+        create: (scene) => createShopInterior(scene, 'drycleaner', 'Dry Cleaners', INTERIOR_TARGET_SIZE, INTERIOR_TARGET_SIZE),
+        dimensions: { width: INTERIOR_TARGET_SIZE, depth: INTERIOR_TARGET_SIZE }
+    },
+    DUNKIN_INTERIOR: {
+        create: (scene) => createShopInterior(scene, 'coffee', 'Donut Galaxy', INTERIOR_TARGET_SIZE, INTERIOR_TARGET_SIZE),
+        dimensions: { width: INTERIOR_TARGET_SIZE, depth: INTERIOR_TARGET_SIZE }
+    },
+    FLOWER_SHOP_INTERIOR: {
+        create: (scene) => createShopInterior(scene, 'flowers', 'Flower Shop', INTERIOR_TARGET_SIZE, INTERIOR_TARGET_SIZE),
+        dimensions: { width: INTERIOR_TARGET_SIZE, depth: INTERIOR_TARGET_SIZE }
+    },
+    CHURCH_INTERIOR: {
+        create: (scene) => createChurchInterior(scene),
+        dimensions: { width: INTERIOR_TARGET_SIZE, depth: INTERIOR_TARGET_SIZE }
+    },
+    TOWNHALL_INTERIOR: {
+        create: (scene) => createTownHallInterior(scene),
+        dimensions: { width: INTERIOR_TARGET_SIZE, depth: INTERIOR_TARGET_SIZE }
+    },
+    HOUSE_INTERIOR: {
+        create: (scene) => createHouseInterior(scene),
+        dimensions: { width: INTERIOR_TARGET_SIZE, depth: INTERIOR_TARGET_SIZE }
+    },
+    HOSPITAL_INTERIOR: {
+        create: (scene) => createHospitalInterior(scene),
+        dimensions: { width: INTERIOR_TARGET_SIZE, depth: INTERIOR_TARGET_SIZE }
+    },
+    MODERN_INTERIOR: {
+        create: (scene) => createModernInterior(scene),
+        dimensions: { width: INTERIOR_TARGET_SIZE, depth: INTERIOR_TARGET_SIZE }
+    },
+    BRICK_INTERIOR: {
+        create: (scene) => createBrickInterior(scene),
+        dimensions: { width: INTERIOR_TARGET_SIZE, depth: INTERIOR_TARGET_SIZE }
+    },
+    SHOP_INTERIOR: {
+        create: (scene) => createShopInterior(scene, 'shop', 'Shop', INTERIOR_TARGET_SIZE, INTERIOR_TARGET_SIZE),
+        dimensions: { width: INTERIOR_TARGET_SIZE, depth: INTERIOR_TARGET_SIZE }
+    },
+    INDUSTRIAL_INTERIOR: {
+        create: (scene) => createIndustrialInterior(scene),
+        dimensions: { width: INTERIOR_TARGET_SIZE, depth: INTERIOR_TARGET_SIZE }
+    },
+    GRAVEYARD_INTERIOR: {
+        create: (scene) => createGraveyardInterior(scene),
+        dimensions: { width: INTERIOR_TARGET_SIZE, depth: INTERIOR_TARGET_SIZE }
+    }
 };

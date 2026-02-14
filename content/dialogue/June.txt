@@ -1,0 +1,6 @@
+=== HOUSE_INTERIOR ===
+UNLOCKS: Scrapbook
+
+June: This parlor watched teenagers sneak out to that plaza for decades.
+Player: You kept track?
+June: On camcorder tapes. I'm digitizing them for the farewell show—save me a verse.

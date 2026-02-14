@@ -1,0 +1,23 @@
+=== PLAZA ===
+UNLOCKS: Tony Sucks
+
+Jake: Dude, that pizza place sucks now that Tony owns it. That was the last good pizza place in town!
+Player: I know, I heard they have a new menu now.
+Jake: Yeah, it's all fancy and expensive. I wrote a song about it, but it's mostly just complaining about the new menu. How does a pizza take seven days to make?
+Player: I would definitely listen to that song.
+Jake: I've got tons of new songs, my favorite one is about how the more things change, the more they stay the same.
+Player: That's so true.
+
+=== FOREST_SUBURBAN ===
+UNLOCKS: The More Things Change (The More They Stay The Same)
+
+Jake: Man, this place reminds me of summer camp. So much quieter than downtown.
+Player: Do you come here often?
+Jake: Yeah, when I need to escape the chaos. I actually recorded a song here using just forest sounds and my voice.
+
+=== POND ===
+UNLOCKS: Dying Light
+
+Jake: The fire's almost out... feels like the end of something, you know?
+Player: Yeah, everyone's gone home.
+Jake: That's when I do my best writing. Made this track about watching the embers fade and thinking about the night.

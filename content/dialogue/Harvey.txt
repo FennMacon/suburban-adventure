@@ -1,0 +1,6 @@
+=== BRICK_INTERIOR ===
+UNLOCKS: Bricks
+
+Harvey: These bricks were salvaged from the mill. They deserve another chapter.
+Player: What's your plan?
+Harvey: Archive every creak and echo on cassette, then layer it under a new melody.
