@@ -16,7 +16,9 @@ let debugInfo = {
 };
 
 // Create retro flip phone UI
-export const initializePhoneUI = () => {
+// options.mobileLayout: if true, phone button is top-center (avoids overlap with joysticks)
+export const initializePhoneUI = (options = {}) => {
+    const isMobileLayout = options.mobileLayout === true;
     // Create phone container
     phoneUI = document.createElement('div');
     phoneUI.id = 'phone-ui';
@@ -220,7 +222,25 @@ export const initializePhoneUI = () => {
             <circle cx="16" cy="24" r="1.5"/>
         </svg>
     `;
-    phoneButton.style.cssText = `
+    phoneButton.style.cssText = isMobileLayout
+        ? `
+        position: fixed;
+        top: max(20px, env(safe-area-inset-top));
+        left: 50%;
+        transform: translateX(-50%);
+        width: 48px;
+        height: 48px;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        z-index: 1500;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+        padding: 0;
+    `
+        : `
         position: fixed;
         bottom: 20px;
         right: 20px;

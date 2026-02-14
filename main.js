@@ -11,14 +11,15 @@ import { createUnifiedMapGround, createConnectorRoads, createConnectorVehicles, 
 import { createNightSky, updateNightSky } from './nightsky.js';
 import { createSkybox, updateSkybox } from './skybox.js';
 import { createParkElements, createBuildingFacade, createInteriorScene, createGlowingWireframeMaterial, createPondElements, createShopInterior, INTERIOR_REGISTRY, INTERIOR_TARGET_SIZE } from './buildings.js';
-import { createNPCs, createInteriorNPCs, initializeNPCInteraction, checkNearbyNPCs, checkNearbyItems, checkBusStopProximity, initializeConversationHandlers, getNextSceneInfo } from './npcs.js';
+import { createNPCs, createInteriorNPCs, initializeNPCInteraction, checkNearbyNPCs, checkNearbyItems, checkBusStopProximity, initializeConversationHandlers, getNextSceneInfo, handleInteractionInput } from './npcs.js';
 import { getCurrentScene, getPlazaConfig, SCENE_CONFIGS, UNIFIED_MAP, UNIFIED_MAP_ZONE_OFFSETS, UNIFIED_MAP_ZONES, getBuildingPortalDestination, getBusStopArrivalPosition } from './scenes.js';
 import { 
     startConversation, advanceConversation, endConversation, hasActiveConversation, 
     getCurrentDialogue, getUnlockedSongs, checkIfLastLine, unlockCurrentSong, 
     getConversationAtEnd, setConversationAtEnd
 } from './dialogue.js';
-import { initializeControls, updateCameraPosition, isMobile, getMobileActionButton, updateMobileActionButton, setCurrentAction } from './controls.js';
+import { initializeControls, updateCameraPosition, isMobile } from './controls.js';
+import { initializeMobileControls, updateMobileActionButton, getMobileActionButton } from './mobile-controls.js';
 import { initializeRenderer, initializePostProcessing, renderScene, handleResize, getRenderer } from './renderer.js';
 import { createAnimationLoop } from './animation.js';
 import { initializePhoneUI, initializePhoneKeyboard, updatePhoneDebugInfo } from './phone-ui.js';
@@ -367,20 +368,101 @@ if (PLAZA_CONFIG.IS_INTERIOR) {
 
 // Initialize NPC interaction system
 initializeNPCInteraction();
-initializeConversationHandlers(CURRENT_SCENE);
+initializeConversationHandlers();
 
-// Mobile action button: tap triggers same as Space (bus/portal/door/conversation based on context)
-if (isMobile) {
-    const actionBtn = getMobileActionButton();
-    if (actionBtn) {
-        actionBtn.addEventListener('click', () => {
-            document.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space', key: ' ' }));
-        });
+// handleActionInput: unified handler for Space/mobile button - conversations, items, portals, bus
+const handleActionInput = () => {
+    // Skip portals/bus if in conversation (Space is for conversation only in that case)
+    if (hasActiveConversation()) {
+        handleInteractionInput(CURRENT_SCENE);
+        return;
     }
+    // Conversations, items, NPC talk - returns true if consumed
+    if (handleInteractionInput(CURRENT_SCENE)) return;
+
+    // Building door portals
+    if (streetElements && streetElements.buildingPortals) {
+        let nearestPortal = null;
+        let nearestDistance = Infinity;
+        streetElements.buildingPortals.forEach(portal => {
+            const distance = camera.position.distanceTo(portal.position);
+            if (distance < 5 && distance < nearestDistance) {
+                nearestPortal = portal;
+                nearestDistance = distance;
+            }
+        });
+        if (nearestPortal) {
+            const targetScene = getBuildingPortalDestination(nearestPortal.style);
+            console.log(`Entering ${nearestPortal.name}, switching to ${targetScene.key} (${targetScene.name})`);
+            localStorage.setItem('previousExteriorScene', nearestPortal.zoneKey || CURRENT_SCENE);
+            const portalPosition = { x: nearestPortal.position.x, y: camera.position.y, z: nearestPortal.position.z };
+            localStorage.setItem('buildingPortalPosition', JSON.stringify(portalPosition));
+            const isFarBuilding = nearestPortal.isFarBuilding === true;
+            localStorage.setItem('isFarBuilding', isFarBuilding ? 'true' : 'false');
+            switchScene(targetScene.key);
+            return;
+        }
+    }
+
+    // Exit portal if in interior scene
+    if (PLAZA_CONFIG.IS_INTERIOR && streetElements && streetElements.exitPortal) {
+        const exitPortalPos = new THREE.Vector3();
+        streetElements.exitPortal.getWorldPosition(exitPortalPos);
+        if (camera.position.distanceTo(exitPortalPos) < 3) {
+            const previousScene = localStorage.getItem('previousExteriorScene') || 'PLAZA';
+            console.log(`Exiting interior, returning to ${previousScene}`);
+            switchScene(previousScene);
+            return;
+        }
+    }
+
+    // Bus stop travel - UNIFIED_MAP
+    if (!PLAZA_CONFIG.IS_INTERIOR && UNIFIED_MAP && streetElements?.zoneRootGroups) {
+        let nearestZone = null;
+        let distanceToBusStop = Infinity;
+        streetElements.zoneRootGroups.forEach(zoneRoot => {
+            const zoneKey = zoneRoot.userData?.zoneKey;
+            const zoneConfig = SCENE_CONFIGS[zoneKey] || PLAZA_CONFIG;
+            const offset = zoneRoot.userData?.zoneOffset || { x: 0, z: 0 };
+            const busStopPos = new THREE.Vector3(
+                offset.x + (zoneConfig.ROAD_POSITION_X ? zoneConfig.ROAD_POSITION_X + 3 : -15),
+                0,
+                offset.z + zoneConfig.NEAR_SIDEWALK_Z
+            );
+            const d = camera.position.distanceTo(busStopPos);
+            if (d < distanceToBusStop) {
+                distanceToBusStop = d;
+                nearestZone = zoneKey;
+            }
+        });
+        if (distanceToBusStop < 5 && nearestZone) {
+            const next = getNextSceneInfo(nearestZone);
+            const pos = getBusStopArrivalPosition(next.key);
+            camera.position.set(pos.x, pos.y, pos.z);
+            console.log(`🚌 Travelled to ${next.name}`);
+            return;
+        }
+    }
+
+    // Fall back to bus stop (non-unified exterior scenes)
+    if (!PLAZA_CONFIG.IS_INTERIOR && !UNIFIED_MAP) {
+        const busStopX = PLAZA_CONFIG.ROAD_POSITION_X ? PLAZA_CONFIG.ROAD_POSITION_X + 3 : -15;
+        const busStopPosition = new THREE.Vector3(busStopX, 0, PLAZA_CONFIG.NEAR_SIDEWALK_Z);
+        if (camera.position.distanceTo(busStopPosition) < 5) {
+            const nextScene = getNextSceneInfo(CURRENT_SCENE);
+            console.log(`Switching to ${nextScene.key} (${nextScene.name})`);
+            switchScene(nextScene.key);
+        }
+    }
+};
+
+// Initialize mobile controls (joysticks, action button) when on mobile
+if (isMobile) {
+    initializeMobileControls({ onAction: handleActionInput });
 }
 
-// Initialize phone UI
-initializePhoneUI();
+// Initialize phone UI (mobileLayout: phone button top-center on mobile to avoid joystick overlap)
+initializePhoneUI({ mobileLayout: isMobile });
 initializePhoneKeyboard();
 
 // =====================================================
@@ -400,109 +482,8 @@ scene.userData.camera = camera;
 // KEYBOARD EVENT HANDLERS
 // =====================================================
 document.addEventListener('keydown', (event) => {
-    // Use Space or F for scene switching - Space is primary, F kept for backwards compatibility
-    // Note: Space is also used for conversations/items in npcs.js, but that handler checks first
-    // and only processes if there's an active conversation or item interaction
     if (event.code === 'Space' || event.code === 'KeyF') {
-        // Skip if in conversation (Space will be handled by npcs.js for conversations)
-        if (event.code === 'Space' && hasActiveConversation()) {
-            return;
-        }
-        // First check for building door portals
-        if (streetElements && streetElements.buildingPortals) {
-            let nearestPortal = null;
-            let nearestDistance = Infinity;
-            
-            streetElements.buildingPortals.forEach(portal => {
-                const distance = camera.position.distanceTo(portal.position);
-                if (distance < 5 && distance < nearestDistance) {
-                    nearestPortal = portal;
-                    nearestDistance = distance;
-                }
-            });
-            
-            if (nearestPortal) {
-                const targetScene = getBuildingPortalDestination(nearestPortal.style);
-                console.log(`Entering ${nearestPortal.name}, switching to ${targetScene.key} (${targetScene.name})`);
-                
-                // Save which exterior scene/zone we came from before switching to interior
-                localStorage.setItem('previousExteriorScene', nearestPortal.zoneKey || CURRENT_SCENE);
-                
-                // Save the building portal position so we can return to it when exiting
-                const portalPosition = {
-                    x: nearestPortal.position.x,
-                    y: camera.position.y,
-                    z: nearestPortal.position.z
-                };
-                localStorage.setItem('buildingPortalPosition', JSON.stringify(portalPosition));
-                
-                // Check if this is a far-side building (at FAR_BUILDINGS_Z)
-                // Far buildings face the street, so when exiting we should face the street (no 180 rotation)
-                const isFarBuilding = nearestPortal.isFarBuilding === true;
-                localStorage.setItem('isFarBuilding', isFarBuilding ? 'true' : 'false');
-                console.log(`Saved building portal position: (${portalPosition.x}, ${portalPosition.y}, ${portalPosition.z}), isFarBuilding: ${isFarBuilding}`);
-                
-                // Switch to interior scene
-                switchScene(targetScene.key);
-                return;
-            }
-        }
-        
-        // Check exit portal if in interior scene
-        if (PLAZA_CONFIG.IS_INTERIOR && streetElements && streetElements.exitPortal) {
-            const exitPortalPos = new THREE.Vector3();
-            streetElements.exitPortal.getWorldPosition(exitPortalPos);
-            const distanceToExit = camera.position.distanceTo(exitPortalPos);
-            
-            if (distanceToExit < 3) {
-                const previousScene = localStorage.getItem('previousExteriorScene') || 'PLAZA';
-                console.log(`Exiting interior, returning to ${previousScene}`);
-                switchScene(previousScene);
-                return;
-            }
-        }
-        
-        // Bus stop travel - UNIFIED_MAP: cycle City → Park → Pond → City
-        if (!PLAZA_CONFIG.IS_INTERIOR && UNIFIED_MAP && streetElements?.zoneRootGroups) {
-            let nearestZone = null;
-            let distanceToBusStop = Infinity;
-            streetElements.zoneRootGroups.forEach(zoneRoot => {
-                const zoneKey = zoneRoot.userData?.zoneKey;
-                const zoneConfig = SCENE_CONFIGS[zoneKey] || PLAZA_CONFIG;
-                const offset = zoneRoot.userData?.zoneOffset || { x: 0, z: 0 };
-                const busStopPos = new THREE.Vector3(
-                    offset.x + (zoneConfig.ROAD_POSITION_X ? zoneConfig.ROAD_POSITION_X + 3 : -15),
-                    0,
-                    offset.z + zoneConfig.NEAR_SIDEWALK_Z
-                );
-                const d = camera.position.distanceTo(busStopPos);
-                if (d < distanceToBusStop) {
-                    distanceToBusStop = d;
-                    nearestZone = zoneKey;
-                }
-            });
-            if (distanceToBusStop < 5 && nearestZone) {
-                const next = getNextSceneInfo(nearestZone);
-                const pos = getBusStopArrivalPosition(next.key);
-                camera.position.set(pos.x, pos.y, pos.z);
-                console.log(`🚌 Travelled to ${next.name}`);
-                return;
-            }
-        }
-        
-        // Fall back to bus stop if no building portal nearby (only for non-unified exterior scenes)
-        if (!PLAZA_CONFIG.IS_INTERIOR && !UNIFIED_MAP) {
-            // Linear scene progression: PLAZA → FOREST_SUBURBAN → POND → PLAZA
-            const busStopX = PLAZA_CONFIG.ROAD_POSITION_X ? PLAZA_CONFIG.ROAD_POSITION_X + 3 : -15;
-            const busStopPosition = new THREE.Vector3(busStopX, 0, PLAZA_CONFIG.NEAR_SIDEWALK_Z);
-            const distanceToBusStop = camera.position.distanceTo(busStopPosition);
-            
-            if (distanceToBusStop < 5) {
-                const nextScene = getNextSceneInfo(CURRENT_SCENE);
-                console.log(`Switching to ${nextScene.key} (${nextScene.name})`);
-                switchScene(nextScene.key);
-            }
-        }
+        handleActionInput();
     }
 });
 

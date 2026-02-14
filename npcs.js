@@ -473,17 +473,13 @@ const getBuildingPortalDestination = (buildingStyle, currentScene) => {
 // Export getNextScene for use in main.js
 export const getNextSceneInfo = getNextScene;
 
-// Initialize conversation interaction handlers
-export const initializeConversationHandlers = (CURRENT_SCENE) => {
-    document.addEventListener('keydown', (event) => {
-        if (event.code === 'Space') {
-            handleInteractionKey(CURRENT_SCENE);
-        }
-    });
+// Initialize conversation interaction handlers (Space key now handled by main.js handleActionInput)
+export const initializeConversationHandlers = () => {
+    // No-op: Space is handled via handleActionInput in main.js which calls handleInteractionInput
 };
 
-// Handle interaction key
-const handleInteractionKey = (CURRENT_SCENE) => {
+// Handle interaction input - returns true if action was consumed (caller should not process portals/bus)
+export const handleInteractionInput = (CURRENT_SCENE) => {
     // Check if we walked away from the NPC we were talking to
     if (hasActiveConversation() && conversationNPC && nearbyNPC !== conversationNPC) {
         console.log('🚶 Walked away from', conversationNPC.userData.name, 'to', nearbyNPC?.userData.name || 'nobody');
@@ -515,7 +511,7 @@ const handleInteractionKey = (CURRENT_SCENE) => {
             }
         }, 500);
         
-        return; // Don't process the Space key press this frame
+        return true; // Consumed: don't process portals/bus
     }
     
     if (hasActiveConversation()) {
@@ -601,6 +597,7 @@ const handleInteractionKey = (CURRENT_SCENE) => {
                     };
                     document.addEventListener('keydown', endConversationHandler);
                 }, 100);
+                return true;
             } else {
                 // No unlock, fade out dialogue UI
                 endConversation();
@@ -630,6 +627,7 @@ const handleInteractionKey = (CURRENT_SCENE) => {
                         nearbyItemUI.style.display = 'none';
                     }
                 }, 500);
+                return true;
             }
         } else {
             // Continue ongoing conversation
@@ -652,13 +650,15 @@ const handleInteractionKey = (CURRENT_SCENE) => {
                     setConversationAtEnd(true);
                 }
             }
+            return true;
         }
     } else {
         // Check item interactions before NPC interactions (priority: conversation > item > NPC)
         handleItemInteractionKey();
+        if (showingItemFlavor) return true; // Item interaction consumed the action
         
         // Only check NPC if item interaction didn't handle it
-        if (!showingItemFlavor && nearbyNPC) {
+        if (nearbyNPC) {
             // Start new conversation - use NPC's zone so unified map plays correct dialogue
             const npcName = nearbyNPC.userData.name;
             const sceneType = nearbyNPC.userData.zoneKey ?? CURRENT_SCENE;
@@ -678,7 +678,9 @@ const handleInteractionKey = (CURRENT_SCENE) => {
                     console.log('✅ Conversation started and advanced');
                 }
             }
+            return true; // Started conversation
         }
+        return false; // Nothing to do - caller may process portals/bus
     }
 };
 
