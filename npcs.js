@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { createWireframeMaterial } from './utils.js';
 import { INTERIOR_TARGET_SIZE, createGlowingWireframeMaterial } from './buildings.js';
 import { startConversation, getCurrentDialogue, advanceConversation, hasActiveConversation, endConversation, getConversationAtEnd, setConversationAtEnd, unlockCurrentSong, getUnlockedSongs, getCurrentConversationUnlock, isSongUnlocked, markItemEncountered } from './dialogue.js';
-import { SCENE_CONFIGS } from './scenes.js';
+import { SCENE_CONFIGS, UNIFIED_MAP, UNIFIED_MAP_ZONE_OFFSETS } from './scenes.js';
 
 const DEFAULT_NPC_COLOR = 0xFF6B9D;
 const NPC_WORLD_POSITION = new THREE.Vector3();
@@ -357,10 +357,23 @@ export const checkBusStopProximity = (camera, PLAZA_CONFIG, CURRENT_SCENE, stree
         return;
     }
     
-    // Bus stop position (adjust for POND scene where it's on the side)
-    const busStopX = PLAZA_CONFIG.ROAD_POSITION_X ? PLAZA_CONFIG.ROAD_POSITION_X + 3 : -15;
-    const busStopPosition = new THREE.Vector3(busStopX, 0, PLAZA_CONFIG.NEAR_SIDEWALK_Z);
-    const distanceToBusStop = playerPosition.distanceTo(busStopPosition);
+    // In unified map, check distance to nearest bus stop (one per zone)
+    let distanceToBusStop = Infinity;
+    if (UNIFIED_MAP && streetElements && streetElements.zoneRootGroups) {
+        // Find nearest bus stop across all zones
+        streetElements.zoneRootGroups.forEach(zoneRoot => {
+            const zoneConfig = SCENE_CONFIGS[zoneRoot.userData?.zoneKey] || PLAZA_CONFIG;
+            const offset = zoneRoot.userData?.zoneOffset || { x: 0, z: 0 };
+            const busStopX = zoneConfig.ROAD_POSITION_X ? zoneConfig.ROAD_POSITION_X + 3 : -15;
+            const busStopPos = new THREE.Vector3(offset.x + busStopX, 0, offset.z + zoneConfig.NEAR_SIDEWALK_Z);
+            const d = playerPosition.distanceTo(busStopPos);
+            if (d < distanceToBusStop) distanceToBusStop = d;
+        });
+    } else {
+        const busStopX = PLAZA_CONFIG.ROAD_POSITION_X ? PLAZA_CONFIG.ROAD_POSITION_X + 3 : -15;
+        const busStopPosition = new THREE.Vector3(busStopX, 0, PLAZA_CONFIG.NEAR_SIDEWALK_Z);
+        distanceToBusStop = playerPosition.distanceTo(busStopPosition);
+    }
     
     // First check if we're near a building door (building portals take priority)
     if (streetElements && streetElements.buildingPortals) {
@@ -400,13 +413,22 @@ export const checkBusStopProximity = (camera, PLAZA_CONFIG, CURRENT_SCENE, stree
     
     // Check bus stop if not near a building door
     if (distanceToBusStop < 5) {
-        const nextScene = getNextScene(CURRENT_SCENE);
-        sceneSwitchUI.innerHTML = `
-            <div style="font-weight: bold; margin-bottom: 5px;">🚌 Bus Stop</div>
-            <div style="font-size: 12px; margin-bottom: 5px;">Press Space to travel to:</div>
-            <div style="color: #88FF88;">${nextScene.name}</div>
-        `;
-        sceneSwitchUI.style.display = 'block';
+        if (UNIFIED_MAP) {
+            // In unified map, show direction hint instead of travel option
+            sceneSwitchUI.innerHTML = `
+                <div style="font-weight: bold; margin-bottom: 5px;">🚌 Bus Stop</div>
+                <div style="font-size: 12px;">Walk to explore The Suburbs (north) or The Pond (further north)</div>
+            `;
+            sceneSwitchUI.style.display = 'block';
+        } else {
+            const nextScene = getNextScene(CURRENT_SCENE);
+            sceneSwitchUI.innerHTML = `
+                <div style="font-weight: bold; margin-bottom: 5px;">🚌 Bus Stop</div>
+                <div style="font-size: 12px; margin-bottom: 5px;">Press Space to travel to:</div>
+                <div style="color: #88FF88;">${nextScene.name}</div>
+            `;
+            sceneSwitchUI.style.display = 'block';
+        }
     } else {
         sceneSwitchUI.style.display = 'none';
     }

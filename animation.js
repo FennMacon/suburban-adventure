@@ -3,10 +3,13 @@ import * as THREE from 'three';
 import { updateNightSky } from './nightsky.js';
 import { updateSkybox } from './skybox.js';
 import { createWireframeMaterial } from './utils.js';
+import { HORIZONTAL_BOUNDS, VERTICAL_BOUNDS, CONNECTOR_X } from './roads.js';
 
 // Animation variables
 export let time = 0;
 let lastTime = 0;
+let dayTime = 0;
+const DAY_LENGTH = 120; // seconds for full day/night cycle
 
 // Get average frequency (simplified - no audio)
 const getAverageFrequency = (start, end) => {
@@ -97,90 +100,112 @@ export const animateNeonSigns = (streetElements) => {
     }
 };
 
-// Animate cars
+// Animate cars - supports horizontal zone streets and vertical connector roads
 export const animateCars = (streetElements, createCar, getRandomCarColor) => {
     if (!streetElements.cars) return;
     
     const carPositions = {};
+    const BOUNDS = { horizontal: HORIZONTAL_BOUNDS, vertical: VERTICAL_BOUNDS };
+    const speed = 0.05;
     
     // Move existing cars
     for (let i = streetElements.cars.length - 1; i >= 0; i--) {
         const car = streetElements.cars[i];
+        const roadType = car.userData.roadType || 'horizontal';
         const direction = car.userData.direction;
-        const speed = direction === 'left' ? 0.05 : -0.05;
-        const prevX = car.position.x;
-        const newX = prevX + speed;
+        const bounds = car.userData.bounds || BOUNDS.horizontal;
+        const isVertical = roadType === 'vertical';
         
-        // Remove cars that go off-screen
-        if ((direction === 'left' && newX > 140) || 
-            (direction === 'right' && newX < -140)) {
-            streetElements.streetElementsGroup.remove(car);
+        const axis = isVertical ? 'z' : 'x';
+        const boundsMax = isVertical ? bounds.zMax : bounds.xMax;
+        const boundsMin = isVertical ? bounds.zMin : bounds.xMin;
+        const moveAmount = isVertical
+            ? (direction === 'left' ? -speed : speed)   // Vertical: left = -z, right = +z
+            : (direction === 'left' ? speed : -speed);   // Horizontal: left = +x, right = -x
+        const prevVal = car.position[axis];
+        const newVal = prevVal + moveAmount;
+        
+        const offLeft = (direction === 'left' && newVal > boundsMax);
+        const offRight = (direction === 'right' && newVal < boundsMin);
+        
+        if (offLeft || offRight) {
+            const parentGroup = car.parent;
+            if (parentGroup) parentGroup.remove(car);
             streetElements.cars.splice(i, 1);
             continue;
         }
         
-        // Check for collisions
+        // Collision check (same zone/road only)
         let canMove = true;
-        const carWidth = 2;
-        const minSafeDistance = 3;
+        const zoneKey = car.userData.zoneKey || '';
+        const connectorX = car.userData.connectorX;
         
+        const perpAxis = isVertical ? 'x' : 'z';
         Object.keys(carPositions).forEach(otherCarIndex => {
-            if (parseInt(otherCarIndex) !== i) {
-                const otherCarInfo = carPositions[otherCarIndex];
-                const otherX = otherCarInfo.x;
-                const otherZ = otherCarInfo.z;
-                const otherDirection = otherCarInfo.direction;
-                
-                if (Math.abs(car.position.z - otherZ) < 1) {
-                    if (direction === otherDirection) {
-                        const distance = Math.abs(newX - otherX);
-                        if (distance < minSafeDistance) {
-                            canMove = false;
-                        }
-                    }
+            if (parseInt(otherCarIndex) === i) return;
+            const other = carPositions[otherCarIndex];
+            const sameRoad = (zoneKey && other.zoneKey === zoneKey) || (connectorX !== undefined && other.connectorX === connectorX);
+            if (!sameRoad) return;
+            
+            const otherAxisVal = other[axis];
+            const myPerp = car.position[perpAxis];
+            const otherPerp = other[perpAxis];
+            if (Math.abs(myPerp - otherPerp) < 1) {
+                if (direction === other.direction) {
+                    if (Math.abs(newVal - otherAxisVal) < 3) canMove = false;
                 }
             }
         });
         
-        if (canMove) {
-            car.position.x = newX;
-        }
+        if (canMove) car.position[axis] = newVal;
         
         carPositions[i] = {
             x: car.position.x,
             z: car.position.z,
-            direction: direction
+            direction,
+            zoneKey,
+            connectorX,
+            [axis]: car.position[axis]
         };
     }
     
-    // Spawn new cars
+    // Spawn new cars - horizontal (plaza zone) and vertical (connector)
     const currentTime = time;
-    const timeSinceLastSpawn = currentTime - (streetElements.lastCarSpawnTime || 0);
-    const spawnInterval = 6 + Math.sin(time * 0.1) * 3;
+    const horizInterval = 6 + Math.sin(time * 0.1) * 3;
+    const vertInterval = 10 + Math.sin(time * 0.15) * 4;
+    const horizCars = streetElements.cars.filter(c => c.userData.roadType === 'horizontal' && c.userData.zoneKey === 'PLAZA');
+    const vertCars = streetElements.cars.filter(c => c.userData.roadType === 'vertical');
     
-    if (timeSinceLastSpawn > spawnInterval && streetElements.cars.length < 6) {
+    if (streetElements.streetElementsGroup && (currentTime - (streetElements.lastCarSpawnTime || 0)) > horizInterval && horizCars.length < 6) {
         const spawnLeft = !streetElements.lastSpawnedLeft;
         streetElements.lastSpawnedLeft = spawnLeft;
-        
-        let canSpawn = true;
-        const spawnX = spawnLeft ? -140 : 140;
+        const spawnX = spawnLeft ? HORIZONTAL_BOUNDS.xMin : HORIZONTAL_BOUNDS.xMax;
         const spawnZ = spawnLeft ? 2 : -2;
-        
-        Object.values(carPositions).forEach(carInfo => {
-            const distance = Math.abs(carInfo.x - spawnX);
-            if (Math.abs(carInfo.z - spawnZ) < 1 && distance < 10) {
-                canSpawn = false;
-            }
-        });
-        
+        const canSpawn = !Object.values(carPositions).some(o => o.zoneKey === 'PLAZA' && Math.abs(o.z - spawnZ) < 1 && Math.abs(o.x - spawnX) < 10);
         if (canSpawn) {
-            const direction = spawnLeft ? 'left' : 'right';
-            const newCar = createCar(spawnX, getRandomCarColor(), direction);
+            const newCar = createCar(spawnX, getRandomCarColor(), spawnLeft ? 'left' : 'right');
             newCar.position.z = spawnZ;
+            newCar.userData.roadType = 'horizontal';
+            newCar.userData.zoneKey = 'PLAZA';
+            newCar.userData.bounds = { ...HORIZONTAL_BOUNDS };
             streetElements.streetElementsGroup.add(newCar);
             streetElements.cars.push(newCar);
             streetElements.lastCarSpawnTime = currentTime;
         }
+    }
+    
+    if (streetElements.connectorVehiclesGroup && (currentTime - (streetElements.connectorLastCarSpawnTime || 0)) > vertInterval && vertCars.length < 6) {
+        const spawnZ = Math.random() > 0.5 ? VERTICAL_BOUNDS.zMin : VERTICAL_BOUNDS.zMax;
+        const spawnX = Math.random() > 0.5 ? CONNECTOR_X.LEFT : CONNECTOR_X.RIGHT;
+        const direction = spawnZ < 0 ? 'right' : 'left';
+        const newCar = createCar(spawnX, getRandomCarColor(), direction, { vertical: true });
+        newCar.position.set(spawnX, 0, spawnZ);
+        newCar.userData.roadType = 'vertical';
+        newCar.userData.bounds = { ...VERTICAL_BOUNDS };
+        newCar.userData.connectorX = spawnX;
+        streetElements.connectorVehiclesGroup.add(newCar);
+        streetElements.cars.push(newCar);
+        streetElements.connectorLastCarSpawnTime = currentTime;
     }
 };
 
@@ -409,12 +434,12 @@ export const animateClouds = (streetElements, camera) => {
         // Check bounds BEFORE calculating opacity to prevent full-opacity flash
         let wasReset = false;
         
-        // Constrain cloud to bounds (-100 to 100 on x and z relative to camera)
+        // Constrain cloud to bounds (-250 to 250 relative to camera) - scaled for 1000x1000 map
         const relativeZ = cloud.position.z - camera.position.z;
-        if (relativeZ < -100 || relativeZ > 100) {
-            // Reset to be ahead of camera but within -100 to 100 range relative to camera
-            cloud.position.z = camera.position.z - 100 + Math.random() * 50; // Ahead of camera, within bounds
-            cloud.userData.originalX = (Math.random() - 0.5) * 200; // Match initial bounds (-100 to 100)
+        if (relativeZ < -250 || relativeZ > 250) {
+            // Reset to be ahead of camera but within bounds
+            cloud.position.z = camera.position.z - 250 + Math.random() * 150;
+            cloud.userData.originalX = (Math.random() - 0.5) * 600; // Match spread
             cloud.position.x = cloud.userData.originalX;
             
             // Reset fade phase to start at 0 opacity (sin(-π/2) = -1, which gives fadeValue = 0)
@@ -423,10 +448,10 @@ export const animateClouds = (streetElements, camera) => {
             wasReset = true;
         }
         
-        // Also constrain x position to stay within bounds
-        const relativeX = cloud.position.x;
-        if (relativeX < -100 || relativeX > 100) {
-            cloud.userData.originalX = (Math.random() - 0.5) * 200;
+        // Also constrain x position to stay within bounds (relative to camera)
+        const relativeX = cloud.position.x - camera.position.x;
+        if (relativeX < -250 || relativeX > 250) {
+            cloud.userData.originalX = camera.position.x + (Math.random() - 0.5) * 500;
             cloud.position.x = cloud.userData.originalX;
             
             // Reset fade phase to start at 0 opacity when repositioning
@@ -648,26 +673,29 @@ export const animateCoffeeSteam = (scene, deltaTime) => {
 };
 
 export const animateBus = (streetElements) => {
-    if (!streetElements.bus) return;
+    const buses = streetElements.buses || (streetElements.bus ? [streetElements.bus] : []);
+    if (buses.length === 0) return;
     
-    const bus = streetElements.bus;
-    const speed = bus.userData.speed || 0.03;
-    
-    if (bus.userData.direction === 'left') {
-        bus.position.x += speed;
-        if (bus.position.x > 140) bus.position.x = -140;
-    } else {
-        bus.position.x -= speed;
-        if (bus.position.x < -140) bus.position.x = 140;
+    buses.forEach(bus => {
+        const speed = bus.userData.speed || 0.03;
+        const direction = bus.userData.direction;
+        const bounds = bus.userData.bounds || { xMin: -140, xMax: 140 };
         
-        // Stop briefly at bus stop
-        const busStopX = -15;
-        if (Math.abs(bus.position.x - busStopX) < 1) {
-            bus.userData.speed = 0.005;
+        if (direction === 'left') {
+            bus.position.x += speed;
+            if (bus.position.x > bounds.xMax) bus.position.x = bounds.xMin;
         } else {
-            bus.userData.speed = 0.03;
+            bus.position.x -= speed;
+            if (bus.position.x < bounds.xMin) bus.position.x = bounds.xMax;
+            
+            const busStopX = bus.userData.busStopX ?? -15;
+            if (Math.abs(bus.position.x - busStopX) < 1) {
+                bus.userData.speed = 0.005;
+            } else {
+                bus.userData.speed = 0.03;
+            }
         }
-    }
+    });
 };
 
 // Main animation loop
@@ -696,6 +724,8 @@ export const createAnimationLoop = (
         const deltaTime = (currentTime - lastTime) / 1000;
         lastTime = currentTime;
         time += 0.05;
+        dayTime += deltaTime;
+        const dayProgress = (dayTime % DAY_LENGTH) / DAY_LENGTH;
         
         // Update camera and controls
         updateCameraPosition();
@@ -725,8 +755,8 @@ export const createAnimationLoop = (
         animateCampsiteGlow(streetElements);
         animateClouds(streetElements, camera);
         animateCoffeeSteam(scene, deltaTime);
-        updateNightSky(scene, time);
-        updateSkybox(scene, time);
+        updateNightSky(scene, time, dayProgress);
+        updateSkybox(scene, time, dayProgress);
         
         // Render with post-processing (simple pixelation effect)
         renderer.setRenderTarget(renderTarget);

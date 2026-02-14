@@ -2,6 +2,81 @@
 
 import * as THREE from 'three';
 
+// Check for unified map mode (avoids circular dep - sceneType is passed as 'UNIFIED_MAP' from main.js)
+const isUnifiedMapScene = (sceneType) => sceneType === 'UNIFIED_MAP';
+
+// Daylight cycle keyframes: midnight (0), dawn (0.25), noon (0.5), dusk (0.75)
+const DAY_GRADIENT_KEYFRAMES = {
+    midnight: [
+        { stop: 0, color: '#0a0a1e' },
+        { stop: 0.2, color: '#0f0f2e' },
+        { stop: 0.4, color: '#1a1a3e' },
+        { stop: 0.6, color: '#2d1b4e' },
+        { stop: 0.8, color: '#3a2a5a' },
+        { stop: 1, color: '#4a3a6a' }
+    ],
+    dawn: [
+        { stop: 0, color: '#ff7b00' },
+        { stop: 0.3, color: '#ff9f4d' },
+        { stop: 0.5, color: '#ffb380' },
+        { stop: 0.7, color: '#ffccb3' },
+        { stop: 0.9, color: '#ffe6d9' },
+        { stop: 1, color: '#fff0eb' }
+    ],
+    noon: [
+        { stop: 0, color: '#87CEEB' },
+        { stop: 0.3, color: '#b0d9f0' },
+        { stop: 0.5, color: '#d4ecf7' },
+        { stop: 0.7, color: '#e8f4fa' },
+        { stop: 0.9, color: '#f0f8ff' },
+        { stop: 1, color: '#ffffff' }
+    ],
+    dusk: [
+        { stop: 0, color: '#2d1b69' },
+        { stop: 0.2, color: '#6b3a8a' },
+        { stop: 0.4, color: '#9a5a8a' },
+        { stop: 0.6, color: '#cc6b5a' },
+        { stop: 0.8, color: '#e88b6a' },
+        { stop: 1, color: '#ffaa80' }
+    ]
+};
+
+// Interpolate between two color stops
+const interpolateColor = (fromHex, toHex, t) => {
+    const fromR = parseInt(fromHex.slice(1, 3), 16) / 255;
+    const fromG = parseInt(fromHex.slice(3, 5), 16) / 255;
+    const fromB = parseInt(fromHex.slice(5, 7), 16) / 255;
+    const toR = parseInt(toHex.slice(1, 3), 16) / 255;
+    const toG = parseInt(toHex.slice(3, 5), 16) / 255;
+    const toB = parseInt(toHex.slice(5, 7), 16) / 255;
+    const r = Math.round((fromR + (toR - fromR) * t) * 255);
+    const g = Math.round((fromG + (toG - fromG) * t) * 255);
+    const b = Math.round((fromB + (toB - fromB) * t) * 255);
+    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+};
+
+// Get gradient colors for daylight cycle (UNIFIED_MAP only)
+// dayProgress: 0 = midnight, 0.25 = dawn, 0.5 = noon, 0.75 = dusk, 1 = midnight
+const getGradientColorsForTime = (dayProgress) => {
+    const keys = ['midnight', 'dawn', 'noon', 'dusk'];
+    const positions = [0, 0.25, 0.5, 0.75];
+    let idx = 0;
+    for (let i = 0; i < positions.length; i++) {
+        if (dayProgress >= positions[i]) idx = i;
+    }
+    const nextIdx = (idx + 1) % 4;
+    const fromStops = DAY_GRADIENT_KEYFRAMES[keys[idx]];
+    const toStops = DAY_GRADIENT_KEYFRAMES[keys[nextIdx]];
+    const span = 0.25;
+    const localProgress = nextIdx === 0 ? dayProgress - positions[idx] : (dayProgress - positions[idx]);
+    const t = Math.min(1, Math.max(0, localProgress / span));
+    
+    return fromStops.map((from, i) => ({
+        stop: from.stop,
+        color: interpolateColor(from.color, (toStops[i] || from).color, t)
+    }));
+};
+
 // Get gradient color stops based on scene type
 const getGradientColors = (sceneType) => {
     const isInterior = sceneType && sceneType.includes('INTERIOR');
@@ -38,6 +113,17 @@ const getGradientColors = (sceneType) => {
                 { stop: 0.6, color: '#2d1b4e' },  // Deep purple
                 { stop: 0.8, color: '#3a2a5a' },  // Purple-blue
                 { stop: 1, color: '#4a3a6a' }     // Muted purple at bottom
+            ];
+        
+        case 'UNIFIED_MAP':
+            // Blended gradient for the full outdoor map - neutral twilight
+            return [
+                { stop: 0, color: '#1a1a2e' },    // Dark blue at top
+                { stop: 0.3, color: '#16213e' }, // Navy blue
+                { stop: 0.5, color: '#2d1b69' },  // Deep purple
+                { stop: 0.7, color: '#4a2c7a' },  // Purple
+                { stop: 0.9, color: '#6b3a8a' }, // Pinkish purple
+                { stop: 1, color: '#8b4a9a' }     // Soft pink-purple at bottom
             ];
             
         // Interior scenes - each with unique color palettes
@@ -275,52 +361,70 @@ const createSkybox = (scene, sceneType = 'PLAZA', interiorDimensions = null) => 
         existingFloor.material.dispose();
     }
     
-    // Create a semi-transparent floor
-    // For interior scenes, match the interior dimensions
-    // For exterior scenes, use the default 300x300
-    let floorWidth, floorHeight;
-    if (interiorDimensions && interiorDimensions.width && interiorDimensions.depth) {
-        floorWidth = interiorDimensions.width;
-        floorHeight = interiorDimensions.depth;
-        console.log(`🏪 Creating interior floor: ${floorWidth}x${floorHeight}`);
+    // Unified map uses zone-based ground from createUnifiedMapGround - skip floor here
+    let floor = null;
+    if (!isUnifiedMapScene(sceneType)) {
+        // Create a semi-transparent floor
+        // For interior scenes, match the interior dimensions
+        // For single exterior, use 300x300
+        let floorWidth, floorHeight;
+        if (interiorDimensions && interiorDimensions.width && interiorDimensions.depth) {
+            floorWidth = interiorDimensions.width;
+            floorHeight = interiorDimensions.depth;
+            console.log(`🏪 Creating interior floor: ${floorWidth}x${floorHeight}`);
+        } else {
+            floorWidth = 300;
+            floorHeight = 300;
+            console.log(`🌍 Creating exterior floor: ${floorWidth}x${floorHeight}`);
+        }
+        
+        const floorGeometry = new THREE.PlaneGeometry(floorWidth, floorHeight);
+        const floorColor = sceneType === 'FOREST_SUBURBAN' ? 0x228B22 : 
+                          sceneType === 'POND' ? 0x1B4D3E : 0x333333;
+        const floorMaterial = new THREE.MeshBasicMaterial({
+            color: floorColor,
+            transparent: true,
+            opacity: 0.8,
+            side: THREE.DoubleSide
+        });
+        floor = new THREE.Mesh(floorGeometry, floorMaterial);
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = -0.2;
+        floor.name = "worldFloor";
+        scene.add(floor);
     } else {
-        floorWidth = 300;
-        floorHeight = 300;
-        console.log(`🌍 Creating exterior floor: ${floorWidth}x${floorHeight}`);
+        console.log(`🗺️ Skipping skybox floor - unified map uses zone-based ground`);
     }
     
-    const floorGeometry = new THREE.PlaneGeometry(floorWidth, floorHeight);
-    
-    // Set floor color based on scene type
-    const floorColor = sceneType === 'FOREST_SUBURBAN' ? 0x228B22 : 
-                      sceneType === 'POND' ? 0x1B4D3E : 0x333333; // Dark forest green for pond, green for forest, dark gray for city
-    
-    const floorMaterial = new THREE.MeshBasicMaterial({
-        color: floorColor,
-        transparent: true,
-        opacity: 0.8,
-        side: THREE.DoubleSide // Render both sides
-    });
-    
-    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-    floor.rotation.x = -Math.PI / 2; // Rotate to be horizontal
-    floor.position.y = -0.2; // Position at y=-0.1
-    floor.name = "worldFloor";
-    
-    scene.add(floor);
-    
-    // Store reference in scene.userData
+    // Store reference in scene.userData for updateSkybox
     if (!scene.userData) scene.userData = {};
     scene.userData.skybox = gradientTexture;
-    scene.userData.floor = floor;
+    scene.userData.skyboxCanvas = canvas;
+    scene.userData.sceneType = sceneType;
+    if (floor) scene.userData.floor = floor;
     
     return gradientTexture;
 };
 
+// Redraw gradient on canvas and mark texture for update
+const redrawGradientTexture = (canvas, colorStops) => {
+    const ctx = canvas.getContext('2d');
+    const gradient = ctx.createLinearGradient(0, 0, 0, 256);
+    colorStops.forEach(({ stop, color }) => gradient.addColorStop(stop, color));
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 256, 256);
+};
+
 // Function to update skybox if needed in animation loop
-const updateSkybox = (scene, time) => {
-    // No updates needed for background texture
-    return;
+const updateSkybox = (scene, time, dayProgress = 0) => {
+    if (scene.userData?.sceneType !== 'UNIFIED_MAP') return;
+    const texture = scene.userData.skybox;
+    const canvas = scene.userData.skyboxCanvas;
+    if (!texture || !canvas) return;
+    
+    const colorStops = getGradientColorsForTime(dayProgress);
+    redrawGradientTexture(canvas, colorStops);
+    texture.needsUpdate = true;
 };
 
 export { createSkybox, updateSkybox }; 

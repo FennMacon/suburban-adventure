@@ -1584,12 +1584,12 @@ export const createPondElements = (frontGroup, PLAZA_CONFIG, scene) => {
     return pondElements;
 };
 
-// Create clouds for pond scene - similar to endless-road implementation
+// Create clouds for pond scene - scaled for 1000x1000 unified map
 const createClouds = (scene) => {
     const clouds = [];
     
     // Create several clouds at different positions
-    const cloudCount = 250;
+    const cloudCount = 400;
     for (let i = 0; i < cloudCount; i++) {
         const cloud = new THREE.Group();
         
@@ -1620,11 +1620,11 @@ const createClouds = (scene) => {
             cloud.add(particle);
         }
         
-        // Position cloud in sky
+        // Position cloud in sky - scaled for 1000x1000 unified map
         cloud.position.set(
-            (Math.random() - 0.5) * 300,  // Spread clouds (x: -100 to 100)
-            40 + Math.random() * 40,       // Height variation (y: 40-80)
-            (Math.random() - 0.5) * 300   // Spread along z-axis (z: -100 to 100)
+            (Math.random() - 0.5) * 1000,  // Spread clouds (x: -500 to 500)
+            60 + Math.random() * 80,        // Height (y: 60-140)
+            (Math.random() - 0.5) * 1000   // Spread along z-axis (z: -500 to 500)
         );
         
         // Store movement properties and fade timing

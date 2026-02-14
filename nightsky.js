@@ -24,17 +24,21 @@ const createNightSky = (scene) => {
         moonGlow = createMoonGlow(0.25);
     }
     
-    // Position the moon in the sky (far back and to the side)
-    moon.position.set(30, 25, -50);
+    // Scale moon for 1000x1000 unified map (radius 5 -> 20)
+    moon.scale.setScalar(4);
+    moonGlow.scale.setScalar(4);
+    
+    // Initial position (will be updated by updateNightSky based on dayProgress)
+    moon.position.set(80, 40, -120);
     scene.add(moon);
     
     // Position the glow at the same position
     moonGlow.position.copy(moon.position);
     scene.add(moonGlow);
     
-    // Create stars using particles - more stars for suburban plaza
+    // Create stars using particles - scaled for 1000x1000 unified map
     const starsGeometry = new THREE.BufferGeometry();
-    const starCount = 600; // Doubled for better coverage
+    const starCount = 1500;
     const starsPositions = new Float32Array(starCount * 3);
     const starsSizes = new Float32Array(starCount);
     
@@ -42,8 +46,8 @@ const createNightSky = (scene) => {
     for (let i = 0; i < starCount; i++) {
         // Create a hemispherical distribution for stars
         const theta = Math.random() * Math.PI * 2;
-        const phi = Math.random() * Math.PI * 0.65; // Limit to upper hemisphere
-        const radius = 120 + Math.random() * 30; // Increased distance for larger plaza
+        const phi = Math.random() * Math.PI * 0.6; // Limit to upper hemisphere
+        const radius = 450 + Math.random() * 100; // Scaled for 1000x1000 world
         
         const x = radius * Math.sin(phi) * Math.cos(theta);
         const y = radius * Math.cos(phi) + 10; // Keep stars above horizon
@@ -114,19 +118,32 @@ const createNightSky = (scene) => {
     stars.name = "stars";
     scene.add(stars);
     
+    // Create sun (opposite phase to moon - visible during day)
+    const sunGeometry = new THREE.SphereGeometry(25, 16, 16);
+    const sunMaterial = new THREE.MeshBasicMaterial({
+        color: 0xFFFACD,
+        wireframe: false
+    });
+    const sun = new THREE.Mesh(sunGeometry, sunMaterial);
+    sun.visible = false; // Start hidden, updated by updateNightSky
+    sun.name = 'sun';
+    scene.add(sun);
+    
     // Store references to night sky elements for animation
     scene.userData.nightSky = {
         moon: moon,
         moonGlow: moonGlow,
         stars: stars,
-        moonPhase: moonPhase
+        moonPhase: moonPhase,
+        sun: sun
     };
     
     return {
         moon,
         moonGlow,
         stars,
-        moonPhase
+        moonPhase,
+        sun
     };
 };
 
@@ -334,21 +351,51 @@ const createMoonGlow = (opacity = 0.3) => {
     return glowGroup;
 };
 
-// Update night sky animation
-const updateNightSky = (scene, time) => {
+// Moon arc: dayProgress 0 = east/horizon, 0.5 = zenith, 1 = west/horizon
+// Sun: opposite phase (dayProgress 0.5 = sun at zenith)
+const updateNightSky = (scene, time, dayProgress = 0) => {
     if (!scene.userData.nightSky) return;
     
-    // Update star twinkling with a slower, smoother time increment
-    if (scene.userData.nightSky.stars && 
-        scene.userData.nightSky.stars.material.uniforms) {
-        scene.userData.nightSky.stars.material.uniforms.time.value = time * 500;  // slower time progression
+    // Update star twinkling; dim stars during daytime
+    const stars = scene.userData.nightSky.stars;
+    if (stars?.material?.uniforms) {
+        stars.material.uniforms.time.value = time * 500;
+        const sunAngle = (dayProgress + 0.5) * Math.PI;
+        stars.visible = Math.sin(sunAngle) <= 0.15; // Hide stars when sun is up
+    }
+    
+    const { moon, moonGlow, sun } = scene.userData.nightSky;
+    if (!moon) return;
+    
+    // Moon arc: angle 0 to PI (east -> zenith -> west)
+    const moonAngle = dayProgress * Math.PI;
+    const arcRadius = 200;
+    const horizonY = 50;
+    const moonX = arcRadius * Math.cos(moonAngle);
+    const moonY = horizonY + arcRadius * Math.sin(moonAngle);
+    const moonZ = -150;
+    
+    moon.position.set(moonX, moonY, moonZ);
+    moonGlow.position.copy(moon.position);
+    
+    // Hide moon glow when near/below horizon
+    const moonElevation = Math.sin(moonAngle);
+    moonGlow.visible = moonElevation > 0.05;
+    
+    // Sun: opposite phase - visible when moon is down
+    const sunAngle = (dayProgress + 0.5) * Math.PI;
+    const sunX = arcRadius * Math.cos(sunAngle);
+    const sunY = horizonY + arcRadius * Math.sin(sunAngle);
+    const sunZ = -120;
+    
+    if (sun) {
+        sun.position.set(sunX, sunY, sunZ);
+        sun.visible = Math.sin(sunAngle) > 0.1;
     }
     
     // Slight rotation of moon
-    if (scene.userData.nightSky.moon) {
-        scene.userData.nightSky.moon.rotation.y += 0.001;
-        scene.userData.nightSky.moonGlow.rotation.y += 0.001;
-    }
+    moon.rotation.y += 0.001;
+    moonGlow.rotation.y += 0.001;
 };
 
 export { createNightSky, updateNightSky }; 

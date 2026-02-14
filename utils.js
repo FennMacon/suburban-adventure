@@ -20,8 +20,8 @@ export const clamp = (value, min, max) => {
     return Math.min(Math.max(value, min), max);
 };
 
-// Car creation
-export const createCar = (x, color, direction) => {
+// Car creation - optional options.vertical for connector roads (move in Z)
+export const createCar = (x, color, direction, options = {}) => {
     const carGroup = new THREE.Group();
     
     // Car body
@@ -63,12 +63,18 @@ export const createCar = (x, color, direction) => {
     carGroup.add(wheel4);
     
     carGroup.position.set(x, 0, 0);
-    if (direction === 'left') {
-        carGroup.rotation.y = 0;
+    if (options.vertical) {
+        // Vertical road: face along Z axis
+        carGroup.rotation.y = direction === 'left' ? Math.PI / 2 : -Math.PI / 2;
+        carGroup.userData.axis = 'z';
     } else {
-        carGroup.rotation.y = Math.PI;
+        if (direction === 'left') {
+            carGroup.rotation.y = 0;
+        } else {
+            carGroup.rotation.y = Math.PI;
+        }
+        carGroup.userData.axis = 'x';
     }
-    
     carGroup.userData.direction = direction;
     return carGroup;
 };

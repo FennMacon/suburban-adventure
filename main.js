@@ -6,11 +6,12 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 // Import from our new modular files
 import { createWireframeMaterial, createCar, getRandomCarColor, createTree, createBush } from './utils.js';
+import { HORIZONTAL_BOUNDS, VERTICAL_BOUNDS, CONNECTOR_X } from './roads.js';
 import { createNightSky, updateNightSky } from './nightsky.js';
 import { createSkybox, updateSkybox } from './skybox.js';
 import { createParkElements, createBuildingFacade, createInteriorScene, createGlowingWireframeMaterial, createPondElements, createCumbysInterior, createShopInterior, createChurchInterior, createTownHallInterior, createHouseInterior, createHospitalInterior, createModernInterior, createBrickInterior, createIndustrialInterior, createGraveyardInterior, INTERIOR_TARGET_SIZE } from './buildings.js';
 import { createNPCs, createInteriorNPCs, initializeNPCInteraction, checkNearbyNPCs, checkNearbyItems, checkBusStopProximity, initializeConversationHandlers, getNextSceneInfo } from './npcs.js';
-import { getCurrentScene, getPlazaConfig, SCENE_CONFIGS } from './scenes.js';
+import { getCurrentScene, getPlazaConfig, SCENE_CONFIGS, UNIFIED_MAP, UNIFIED_MAP_ZONE_OFFSETS, UNIFIED_MAP_ZONES, getBuildingPortalDestination } from './scenes.js';
 import { 
     startConversation, advanceConversation, endConversation, hasActiveConversation, 
     getCurrentDialogue, getUnlockedSongs, checkIfLastLine, unlockCurrentSong, 
@@ -103,7 +104,7 @@ const updateDebugInfo = (camera, controls) => {
     
     // Update phone UI with debug info
     updatePhoneDebugInfo({
-        scene: PLAZA_CONFIG.name,
+        scene: UNIFIED_MAP ? 'Unified Map' : PLAZA_CONFIG.name,
         time: new Date().toLocaleTimeString(),
         fps: debugInfo.fps,
         cameraPosition: {
@@ -125,7 +126,7 @@ const updateDebugInfo = (camera, controls) => {
 let CURRENT_SCENE = getCurrentScene();
 let PLAZA_CONFIG = getPlazaConfig(CURRENT_SCENE);
 
-console.log('🎬 Loading scene:', CURRENT_SCENE, 'Config:', PLAZA_CONFIG.name);
+console.log('🎬 Loading scene:', CURRENT_SCENE, 'Config:', PLAZA_CONFIG.name, UNIFIED_MAP ? '(Unified Map)' : '');
 console.log('Scene flags:', {
     FRONT_IS_PARK: PLAZA_CONFIG.FRONT_IS_PARK,
     FRONT_IS_POND: PLAZA_CONFIG.FRONT_IS_POND,
@@ -139,7 +140,7 @@ if (PLAZA_CONFIG.IS_INTERIOR) {
 } else {
     const fogColor = PLAZA_CONFIG.HAUNTED_ATMOSPHERE ? 0x1a1f2e : 0x1a1a2e;
     const fogNear = PLAZA_CONFIG.HAUNTED_ATMOSPHERE ? 30 : 50;
-    const fogFar = PLAZA_CONFIG.HAUNTED_ATMOSPHERE ? 150 : 200;
+    const fogFar = UNIFIED_MAP ? 1200 : (PLAZA_CONFIG.HAUNTED_ATMOSPHERE ? 150 : 200);
     scene.fog = new THREE.Fog(fogColor, fogNear, fogFar);
 }
 
@@ -260,6 +261,120 @@ scene.add(directionalLight);
 // HELPER FUNCTIONS FOR SCENE CREATION
 // =====================================================
 
+// Ground colors by type for 1000x1000 unified map
+const GROUND_COLORS = {
+    concrete: 0x555555,
+    grass: 0x2a5a2a,
+    grass_forest: 0x228B22,
+    grass_pond: 0x1B4D3E
+};
+
+// Create zone-based ground tiles for 1000x1000 unified map
+const createUnifiedMapGround = (scene) => {
+    const zoneSize = 340;
+    const groundGroup = new THREE.Group();
+    groundGroup.name = "UnifiedMapGround";
+
+    UNIFIED_MAP_ZONES.forEach((zone) => {
+        const colorMap = {
+            concrete: GROUND_COLORS.concrete,
+            grass: GROUND_COLORS.grass
+        };
+        const color = zone.config === 'FOREST_SUBURBAN' ? GROUND_COLORS.grass_forest :
+                     zone.config === 'POND' ? GROUND_COLORS.grass_pond :
+                     colorMap[zone.groundType] || GROUND_COLORS.grass;
+
+        const geometry = new THREE.PlaneGeometry(zoneSize, zoneSize);
+        const material = new THREE.MeshBasicMaterial({
+            color,
+            transparent: true,
+            opacity: 0.85,
+            side: THREE.DoubleSide
+        });
+        const tile = new THREE.Mesh(geometry, material);
+        tile.rotation.x = -Math.PI / 2;
+        tile.position.set(zone.x, -0.25, zone.z);
+        tile.name = `ground_${zone.key}`;
+        groundGroup.add(tile);
+    });
+
+    scene.add(groundGroup);
+    return groundGroup;
+};
+
+// Perpendicular roads connecting the 3 rows of zones
+const createConnectorRoads = (scene) => {
+    const roadWidth = 12;
+    const roadLength = 900;
+    const roadMaterial = new THREE.MeshBasicMaterial({ color: 0x444444 });
+    const connectorGroup = new THREE.Group();
+    connectorGroup.name = "ConnectorRoads";
+
+    const leftRoad = new THREE.Mesh(
+        new THREE.PlaneGeometry(roadWidth, roadLength),
+        roadMaterial
+    );
+    leftRoad.rotation.x = -Math.PI / 2;
+    leftRoad.position.set(-170, -0.12, 0);
+    connectorGroup.add(leftRoad);
+
+    const rightRoad = new THREE.Mesh(
+        new THREE.PlaneGeometry(roadWidth, roadLength),
+        roadMaterial.clone()
+    );
+    rightRoad.rotation.x = -Math.PI / 2;
+    rightRoad.position.set(170, -0.12, 0);
+    connectorGroup.add(rightRoad);
+
+    // Junction pieces where zone streets meet connector roads (6 intersections)
+    const junctionMaterial = roadMaterial.clone();
+    const zoneStreetZLevels = [
+        11,    // PLAZA (offset 0 + STREET_Z 11)
+        344,   // FOREST (offset 333 + 11)
+        -322   // POND (offset -333 + 11)
+    ];
+    [-170, 170].forEach((connectorX) => {
+        zoneStreetZLevels.forEach((zoneZ) => {
+            const junction = new THREE.Mesh(
+                new THREE.PlaneGeometry(24, 12),
+                junctionMaterial.clone()
+            );
+            junction.rotation.x = -Math.PI / 2;
+            junction.position.set(connectorX, -0.12, zoneZ);
+            connectorGroup.add(junction);
+        });
+    });
+
+    scene.add(connectorGroup);
+    return connectorGroup;
+};
+
+// Connector road vehicles - drive along Z on x = -170 and x = 170
+const createConnectorVehicles = (scene, createCar, getRandomCarColor) => {
+    const connectorVehiclesGroup = new THREE.Group();
+    connectorVehiclesGroup.name = "ConnectorVehicles";
+    connectorVehiclesGroup.position.set(0, 0, 0);
+    
+    const roads = [
+        { x: CONNECTOR_X.LEFT, direction: 'left' },
+        { x: CONNECTOR_X.LEFT, direction: 'right' },
+        { x: CONNECTOR_X.RIGHT, direction: 'left' },
+        { x: CONNECTOR_X.RIGHT, direction: 'right' }
+    ];
+    
+    roads.forEach((road, i) => {
+        const car = createCar(road.x, getRandomCarColor(), road.direction, { vertical: true });
+        car.position.set(road.x, 0, -300 + i * 150); // Spread along Z
+        car.userData.roadType = 'vertical';
+        car.userData.bounds = { ...VERTICAL_BOUNDS };
+        car.userData.connectorX = road.x;
+        connectorVehiclesGroup.add(car);
+    });
+    
+    scene.add(connectorVehiclesGroup);
+    return connectorVehiclesGroup;
+};
+
 // Forest elements for suburban scenes (with buildings, roads, etc.)
 const createForestElements = () => {
     const forestGroup = new THREE.Group();
@@ -274,9 +389,9 @@ const createForestElements = () => {
         { left: -50, right: 50, front: 50, back: 70 }
     ];
     
-    const roadZone = { left: -150, right: 150, front: 5, back: 17 };
-    const nearSidewalkZone = { left: -150, right: 150, front: -1, back: 5 };
-    const farSidewalkZone = { left: -150, right: 150, front: 17, back: 23 };
+    const roadZone = { left: -178, right: 178, front: 5, back: 17 };
+    const nearSidewalkZone = { left: -178, right: 178, front: -1, back: 5 };
+    const farSidewalkZone = { left: -178, right: 178, front: 17, back: 23 };
     const parkZone = { left: -45, right: 45, front: -50, back: 5 };
     
     const isInBuildingZone = (x, z) => buildingZones.some(zone => 
@@ -407,7 +522,8 @@ const createPondForestElements = () => {
     return forestGroup;
 };
 
-const createStoneWall = () => {
+const createStoneWall = (zoneConfig) => {
+    const config = zoneConfig || PLAZA_CONFIG;
     const wallGroup = new THREE.Group();
     wallGroup.name = "New England Stone Wall";
     
@@ -428,7 +544,7 @@ const createStoneWall = () => {
             stone.position.set(
                 x + (Math.random() - 0.5) * 0.3,
                 y + stoneSize * 0.3,
-                (PLAZA_CONFIG.FAR_SIDEWALK_Z + PLAZA_CONFIG.FAR_BUILDINGS_Z) / 2 + (Math.random() - 0.5) * 0.4
+                (config.FAR_SIDEWALK_Z + config.FAR_BUILDINGS_Z) / 2 + (Math.random() - 0.5) * 0.4
             );
             
             stone.rotation.y = (Math.random() - 0.5) * 0.3;
@@ -471,90 +587,103 @@ const createSuburbanElements = () => {
 };
 
 // =====================================================
-// CREATE STREET SCENE
+// CREATE ZONE SCENE (or single scene when !UNIFIED_MAP)
 // =====================================================
-// NOTE: This function is kept here temporarily. It's ~2000 lines and should
-// eventually be moved to scenes.js for better organization.
+// zoneOffset: { x, z } - world position offset for this zone. Use {x:0,z:0} for single-scene mode.
 
-const createStreetScene = () => {
+const createZoneScene = (zoneConfig, zoneOffset, zoneKey) => {
+    const offset = zoneOffset || { x: 0, z: 0 };
+    const config = zoneConfig || PLAZA_CONFIG;
+    const zoneSceneKey = zoneKey || CURRENT_SCENE;
+    
+    const zoneRootGroup = new THREE.Group();
+    zoneRootGroup.name = `Zone: ${config.name}`;
+    zoneRootGroup.position.set(offset.x, 0, offset.z);
+    zoneRootGroup.userData.zoneKey = zoneSceneKey;
+    zoneRootGroup.userData.zoneOffset = offset;
+    
     const streetElements = {};
+    streetElements.zoneRootGroup = zoneRootGroup;
+    streetElements.zoneKey = zoneSceneKey;
+    streetElements.zoneConfig = config;
+    streetElements.zoneOffset = offset;
     
     // Create row groups for easy positioning
     const frontShopsGroup = new THREE.Group();
     frontShopsGroup.name = "Front Shops Row";
-    frontShopsGroup.position.z = PLAZA_CONFIG.FRONT_SHOPS_Z;
-    scene.add(frontShopsGroup);
+    frontShopsGroup.position.z = config.FRONT_SHOPS_Z;
+    zoneRootGroup.add(frontShopsGroup);
     streetElements.frontShopsGroup = frontShopsGroup;
     
     const farBuildingsGroup = new THREE.Group(); 
     farBuildingsGroup.name = "Far Buildings Row";
-    farBuildingsGroup.position.z = PLAZA_CONFIG.FAR_BUILDINGS_Z;
-    scene.add(farBuildingsGroup);
+    farBuildingsGroup.position.z = config.FAR_BUILDINGS_Z;
+    zoneRootGroup.add(farBuildingsGroup);
     streetElements.farBuildingsGroup = farBuildingsGroup;
     
     // Create street element groups for better organization
     const nearSidewalkElementsGroup = new THREE.Group();
     nearSidewalkElementsGroup.name = "Near Sidewalk Elements";
-    nearSidewalkElementsGroup.position.z = PLAZA_CONFIG.NEAR_SIDEWALK_Z;
-    scene.add(nearSidewalkElementsGroup);
+    nearSidewalkElementsGroup.position.z = config.NEAR_SIDEWALK_Z;
+    zoneRootGroup.add(nearSidewalkElementsGroup);
     streetElements.nearSidewalkElementsGroup = nearSidewalkElementsGroup;
     
     const streetElementsGroup = new THREE.Group();
     streetElementsGroup.name = "Street Elements";
-    streetElementsGroup.position.z = PLAZA_CONFIG.STREET_Z;
-    scene.add(streetElementsGroup);
+    streetElementsGroup.position.z = config.STREET_Z;
+    zoneRootGroup.add(streetElementsGroup);
     streetElements.streetElementsGroup = streetElementsGroup;
     
     const farSidewalkElementsGroup = new THREE.Group();
     farSidewalkElementsGroup.name = "Far Sidewalk Elements";
-    farSidewalkElementsGroup.position.z = PLAZA_CONFIG.FAR_SIDEWALK_Z;
-    scene.add(farSidewalkElementsGroup);
+    farSidewalkElementsGroup.position.z = config.FAR_SIDEWALK_Z;
+    zoneRootGroup.add(farSidewalkElementsGroup);
     streetElements.farSidewalkElementsGroup = farSidewalkElementsGroup;
 
     const parkingElementsGroup = new THREE.Group();
     parkingElementsGroup.name = "Parking Elements";
-    parkingElementsGroup.position.z = PLAZA_CONFIG.PARKING_LOT_Z;
-    scene.add(parkingElementsGroup);
+    parkingElementsGroup.position.z = config.PARKING_LOT_Z;
+    zoneRootGroup.add(parkingElementsGroup);
     streetElements.parkingElementsGroup = parkingElementsGroup;
     
     // Create a proper street layout
     
     // Create ground planes using configuration
     
-    // Main street (where cars drive) - extended to match floor
-    const streetGeometry = new THREE.PlaneGeometry(300, 12, 20, 3);
+    // Main street (where cars drive) - extended to meet connector roads at x=±170
+    const streetGeometry = new THREE.PlaneGeometry(356, 12, 20, 3);
     const streetMaterial = new THREE.MeshBasicMaterial({ color: 0x444444 }); // Dark street color - solid material
     const street = new THREE.Mesh(streetGeometry, streetMaterial);
     street.rotation.x = -Math.PI / 2;
-    street.position.set(0, -0.1, PLAZA_CONFIG.STREET_Z);
-    scene.add(street);
+    street.position.set(0, -0.12, config.STREET_Z);
+    zoneRootGroup.add(street);
     streetElements.street = street;
     
-    // Near sidewalk (where shops are) - extended to match floor
-    const nearSidewalkGeometry = new THREE.PlaneGeometry(300, 6, 20, 2);
+    // Near sidewalk (where shops are) - extended to meet connector roads
+    const nearSidewalkGeometry = new THREE.PlaneGeometry(356, 6, 20, 2);
     const sidewalkMaterial = new THREE.MeshBasicMaterial({ color: 0x888888 }); // Solid sidewalk material
     const nearSidewalk = new THREE.Mesh(nearSidewalkGeometry, sidewalkMaterial);
     nearSidewalk.rotation.x = -Math.PI / 2;
-    nearSidewalk.position.set(0, -0.09, PLAZA_CONFIG.NEAR_SIDEWALK_Z);
-    scene.add(nearSidewalk);
+    nearSidewalk.position.set(0, -0.18, config.NEAR_SIDEWALK_Z);
+    zoneRootGroup.add(nearSidewalk);
     streetElements.nearSidewalk = nearSidewalk;
     
-    // Far sidewalk - extended to match floor
-    const farSidewalkGeometry = new THREE.PlaneGeometry(300, 6, 20, 2);
+    // Far sidewalk - extended to meet connector roads
+    const farSidewalkGeometry = new THREE.PlaneGeometry(356, 6, 20, 2);
     const farSidewalk = new THREE.Mesh(farSidewalkGeometry, sidewalkMaterial);
     farSidewalk.rotation.x = -Math.PI / 2;
-    farSidewalk.position.set(0, -0.09, PLAZA_CONFIG.FAR_SIDEWALK_Z);
-    scene.add(farSidewalk);
+    farSidewalk.position.set(0, -0.18, config.FAR_SIDEWALK_Z);
+    zoneRootGroup.add(farSidewalk);
     streetElements.farSidewalk = farSidewalk;
     
     // Back parking lot - only for city scene (not forest or pond scene)
-    if (!PLAZA_CONFIG.FRONT_IS_PARK && !PLAZA_CONFIG.FRONT_IS_POND) {
-        const parkingGeometry = new THREE.PlaneGeometry(300, 60, 20, 6);
+    if (!config.FRONT_IS_PARK && !config.FRONT_IS_POND) {
+        const parkingGeometry = new THREE.PlaneGeometry(356, 60, 20, 6);
         const parkingMaterial = new THREE.MeshBasicMaterial({ color: 0x555555 }); // Parking lot color - solid material
         const parkingLot = new THREE.Mesh(parkingGeometry, parkingMaterial);
         parkingLot.rotation.x = -Math.PI / 2;
-        parkingLot.position.set(0, -0.08, PLAZA_CONFIG.PARKING_LOT_Z);
-        scene.add(parkingLot);
+        parkingLot.position.set(0, -0.15, config.PARKING_LOT_Z);
+        zoneRootGroup.add(parkingLot);
         streetElements.parkingLot = parkingLot;
         
         // Parking space lines for the back parking lot
@@ -567,7 +696,7 @@ const createStreetScene = () => {
                 const lineGeometry = new THREE.PlaneGeometry(0.2, 15, 1, 3);
                 const line = new THREE.Mesh(lineGeometry, lineMaterial);
                 line.rotation.x = -Math.PI / 2;
-                line.position.set(i * 8, -0.07, 0); // Relative to parking lot group
+                line.position.set(i * 8, -0.14, 0); // Relative to parking lot group
                 lineGroup.add(line);
             }
             
@@ -576,7 +705,7 @@ const createStreetScene = () => {
                 const lineGeometry = new THREE.PlaneGeometry(100, 0.2, 8, 1);
                 const line = new THREE.Mesh(lineGeometry, lineMaterial);
                 line.rotation.x = -Math.PI / 2;
-                line.position.set(0, -0.07, -10 + i * 10); // Relative to parking lot group
+                line.position.set(0, -0.14, -10 + i * 10); // Relative to parking lot group
                 lineGroup.add(line);
             }
             
@@ -596,11 +725,11 @@ const createStreetScene = () => {
         const lineMaterial = new THREE.MeshBasicMaterial({ color: 0x666666 }); // Slightly darker than sidewalk
         
         // Create lines every 12 feet (12 units) across the sidewalk width
-        for (let x = -150; x <= 150; x += 6) {
+        for (let x = -178; x <= 178; x += 6) {
             const lineGeometry = new THREE.PlaneGeometry(0.1, 6, 1, 1);
             const line = new THREE.Mesh(lineGeometry, lineMaterial);
             line.rotation.x = -Math.PI / 2;
-            line.position.set(x, -0.08, 0); // Slightly above sidewalk surface
+            line.position.set(x, -0.17, 0); // Slightly above sidewalk surface
             lineGroup.add(line);
         }
         
@@ -624,32 +753,32 @@ const createStreetScene = () => {
         
         // Solid double yellow center line (running along the road length)
         // Top yellow line
-        const topYellowGeometry = new THREE.PlaneGeometry(300, 0.1, 1, 1); // Full road length
+        const topYellowGeometry = new THREE.PlaneGeometry(356, 0.1, 1, 1); // Full road length
         const topYellowLine = new THREE.Mesh(topYellowGeometry, yellowMaterial);
         topYellowLine.rotation.x = -Math.PI / 2;
-        topYellowLine.position.set(0, -0.09, 0.1); // Slightly offset from center
+        topYellowLine.position.set(0, -0.10, 0.1); // Slightly above asphalt
         lineGroup.add(topYellowLine);
         
         // Bottom yellow line
-        const bottomYellowGeometry = new THREE.PlaneGeometry(300, 0.1, 1, 1); // Full road length
+        const bottomYellowGeometry = new THREE.PlaneGeometry(356, 0.1, 1, 1); // Full road length
         const bottomYellowLine = new THREE.Mesh(bottomYellowGeometry, yellowMaterial);
         bottomYellowLine.rotation.x = -Math.PI / 2;
-        bottomYellowLine.position.set(0, -0.09, -0.1); // Slightly offset from center
+        bottomYellowLine.position.set(0, -0.10, -0.1); // Slightly offset from center
         lineGroup.add(bottomYellowLine);
         
         // White lane dividers (solid lines running along the road length)
         // Left lane divider
-        const leftLineGeometry = new THREE.PlaneGeometry(300, 0.1, 1, 1); // Full road length
+        const leftLineGeometry = new THREE.PlaneGeometry(356, 0.1, 1, 1); // Full road length
         const leftLine = new THREE.Mesh(leftLineGeometry, whiteMaterial);
         leftLine.rotation.x = -Math.PI / 2;
-        leftLine.position.set(0, -0.09, 5); // Left side of road
+        leftLine.position.set(0, -0.10, 5); // Left side of road
         lineGroup.add(leftLine);
         
         // Right lane divider
-        const rightLineGeometry = new THREE.PlaneGeometry(300, 0.1, 1, 1); // Full road length
+        const rightLineGeometry = new THREE.PlaneGeometry(356, 0.1, 1, 1); // Full road length
         const rightLine = new THREE.Mesh(rightLineGeometry, whiteMaterial);
         rightLine.rotation.x = -Math.PI / 2;
-        rightLine.position.set(0, -0.09, -5); // Right side of road
+        rightLine.position.set(0, -0.10, -5); // Right side of road
         lineGroup.add(rightLine);
         
         return lineGroup;
@@ -895,7 +1024,7 @@ const createStreetScene = () => {
     };
 
     // Only create karaoke bar and shops for PLAZA scene
-    if (!PLAZA_CONFIG.FRONT_IS_PARK && !PLAZA_CONFIG.FRONT_IS_POND) {
+    if (!config.FRONT_IS_PARK && !config.FRONT_IS_POND) {
     // Karaoke Bar Building - created as a separate structure
     const buildingGroup = new THREE.Group();
     
@@ -1163,7 +1292,7 @@ const createStreetScene = () => {
     buildingGroup.add(doorwayGlowCutout);
     
     // Position the karaoke bar at X=0 within the front shops group (Z is handled by group)
-    buildingGroup.position.set(PLAZA_CONFIG.KARAOKE_BAR_X, 0, 0); // X position only, Z handled by frontShopsGroup
+    buildingGroup.position.set(config.KARAOKE_BAR_X, 0, 0); // X position only, Z handled by frontShopsGroup
     frontShopsGroup.add(buildingGroup); // Add to front shops group instead of scene
     streetElements.buildingGroup = buildingGroup;
     
@@ -2179,8 +2308,8 @@ const createStreetScene = () => {
     };
     
     // Create specific Massachusetts plaza shops using configuration
-    const facadeDepth = PLAZA_CONFIG.SHOP_DEPTH; // Depth for all buildings
-    const shopHeight = PLAZA_CONFIG.SHOP_HEIGHT; // Standard shop height
+    const facadeDepth = config.SHOP_DEPTH; // Depth for all buildings
+    const shopHeight = config.SHOP_HEIGHT; // Standard shop height
     const shopGap = 1; // Small gap between shops
     
     // Initialize building portals array if it doesn't exist
@@ -2199,7 +2328,7 @@ const createStreetScene = () => {
     ];
     
     // Position shops in a line, keeping the karaoke bar in the center
-    let currentX = PLAZA_CONFIG.SHOP_ROW_START_X; // Start from left side of plaza
+    let currentX = config.SHOP_ROW_START_X; // Start from left side of plaza
     
     plazaShops.forEach((shop, index) => {
         // Skip the center position where karaoke bar is
@@ -2227,14 +2356,17 @@ const createStreetScene = () => {
         // Building is at FRONT_SHOPS_Z (the frontShopsGroup handles Z positioning)
         // The door is at the center front of the building
         // Player approaches from the front (positive Z direction), so portal should be at the building front
-        const doorWorldX = currentX;
-        const doorWorldZ = PLAZA_CONFIG.FRONT_SHOPS_Z; // At the building front face
+        const doorWorldX = offset.x + currentX;
+        const doorWorldZ = offset.z + config.FRONT_SHOPS_Z; // At the building front face (world position)
         
         streetElements.buildingPortals.push({
             building: building,
             position: new THREE.Vector3(doorWorldX, 0, doorWorldZ),
             name: shop.name,
-            style: shop.style
+            style: shop.style,
+            zoneKey: zoneSceneKey,
+            zoneOffset: offset,
+            isFarBuilding: false
         });
         
         console.log(`🏪 Added portal for ${shop.name} at (${doorWorldX.toFixed(1)}, ${doorWorldZ.toFixed(1)})`);
@@ -2514,13 +2646,13 @@ const createStreetScene = () => {
     // Add cars driving on the street - organized to street group with proper lane positioning
     let car1, car2, car3, car4;
     car1 = createCar(-120, getRandomCarColor(), 'left');   // Car on left lane, far left
-    car1.position.z = 2; // Left lane (relative to street group at Z=11, so actual Z=13)
+    car1.position.z = 2; car1.userData.roadType = 'horizontal'; car1.userData.zoneKey = zoneSceneKey; car1.userData.bounds = { ...HORIZONTAL_BOUNDS };
     car2 = createCar(120, getRandomCarColor(), 'right');   // Car on right lane, far right
-    car2.position.z = -2; // Right lane (relative to street group at Z=11, so actual Z=9)
+    car2.position.z = -2; car2.userData.roadType = 'horizontal'; car2.userData.zoneKey = zoneSceneKey; car2.userData.bounds = { ...HORIZONTAL_BOUNDS };
     car3 = createCar(-60, getRandomCarColor(), 'left');   // Car on left lane, mid-left
-    car3.position.z = 2; // Left lane
+    car3.position.z = 2; car3.userData.roadType = 'horizontal'; car3.userData.zoneKey = zoneSceneKey; car3.userData.bounds = { ...HORIZONTAL_BOUNDS };
     car4 = createCar(60, getRandomCarColor(), 'right');   // Car on right lane, mid-right
-    car4.position.z = -2; // Right lane
+    car4.position.z = -2; car4.userData.roadType = 'horizontal'; car4.userData.zoneKey = zoneSceneKey; car4.userData.bounds = { ...HORIZONTAL_BOUNDS };
     
     // Add cars to street group
     streetElementsGroup.add(car1);
@@ -2534,46 +2666,46 @@ const createStreetScene = () => {
     streetElements.lastCarSpawnTime = 0;
     
     // Add a bus to the street group with proper lane positioning
+    const busStopX = config.ROAD_POSITION_X ? config.ROAD_POSITION_X + 3 : -15;
     const bus = createBus(-140, 0xFFFFFF, 'right'); // White MBTA bus, start at far left
-    bus.position.z = -3.75; // Bus lane moved 2 units closer to center (relative to street group at Z=11, so actual Z=8)
+    bus.position.z = -3.75; bus.userData.roadType = 'horizontal'; bus.userData.zoneKey = zoneSceneKey; bus.userData.bounds = { ...HORIZONTAL_BOUNDS }; bus.userData.busStopX = busStopX;
     streetElementsGroup.add(bus);
     streetElements.bus = bus;
     
     // Add a bus stop to the near sidewalk group
     // Bus stop positioning (adjust for POND scene)
-    const busStopX = PLAZA_CONFIG.ROAD_POSITION_X ? PLAZA_CONFIG.ROAD_POSITION_X + 3 : -15;
     const busStop = createBusStop(busStopX);
-    busStop.rotation.y = PLAZA_CONFIG.ROAD_POSITION_X ? 0 : 0; // Rotate if on side (90 degrees clockwise)
+    busStop.rotation.y = config.ROAD_POSITION_X ? 0 : 0; // Rotate if on side (90 degrees clockwise)
     nearSidewalkElementsGroup.add(busStop);
     streetElements.busStop = busStop;
     
     // Add forest elements if enabled for this scene
-    if (PLAZA_CONFIG.FOREST_ELEMENTS) {
+    if (config.FOREST_ELEMENTS) {
         // Use pond-specific forest function for POND scene, regular forest for others
-        const forestElements = PLAZA_CONFIG.FRONT_IS_POND ? 
+        const forestElements = config.FRONT_IS_POND ? 
             createPondForestElements() : createForestElements();
-        scene.add(forestElements);
+        zoneRootGroup.add(forestElements);
         streetElements.forestElements = forestElements;
         console.log("Added forest elements to scene");
     }
     
     // Add suburban elements if enabled for this scene
-    if (PLAZA_CONFIG.SUBURBAN_ELEMENTS) {
+    if (config.SUBURBAN_ELEMENTS) {
         const suburbanElements = createSuburbanElements();
-        scene.add(suburbanElements);
+        zoneRootGroup.add(suburbanElements);
         streetElements.suburbanElements = suburbanElements;
         console.log("Added suburban elements to scene");
     }
     
     // Conditional front area creation - park vs pond vs karaoke bar/shops
-    if (PLAZA_CONFIG.FRONT_IS_PARK) {
+    if (config.FRONT_IS_PARK) {
         // Create park elements for forest suburban scene
         const parkElements = createParkElements(frontShopsGroup);
         streetElements.parkElements = parkElements;
         console.log("🌳 Created park for forest suburban scene");
-    } else if (PLAZA_CONFIG.FRONT_IS_POND) {
+    } else if (config.FRONT_IS_POND) {
         // Create pond elements for pond scene
-        const pondElements = createPondElements(frontShopsGroup, PLAZA_CONFIG, scene);
+        const pondElements = createPondElements(frontShopsGroup, config, scene);
         streetElements.pondElements = pondElements;
         streetElements.campsiteObjects = pondElements.campsiteObjects;
         streetElements.campfire = pondElements.campfire; // Add campfire for animation system
@@ -2590,7 +2722,7 @@ const createStreetScene = () => {
     const facadeDepth = 15; // Standard building depth
     
     // Create far buildings (only for PLAZA and FOREST_SUBURBAN scenes, not POND)
-    if (!PLAZA_CONFIG.FRONT_IS_POND) {
+    if (!config.FRONT_IS_POND) {
         // Buildings on the far side, using a consistent approach across the entire street width
         // Define the total street coverage range
         const streetLeftEdge = -40;
@@ -2600,7 +2732,7 @@ const createStreetScene = () => {
         // Create buildings based on scene type
         let buildings;
         
-        if (PLAZA_CONFIG.FEWER_BUILDINGS) {
+        if (config.FEWER_BUILDINGS) {
             // Park-like New England setting - specific buildings at fixed positions
             console.log("🏘️ Creating specific Groton, MA style buildings for forest scene");
             
@@ -2644,14 +2776,17 @@ const createStreetScene = () => {
             // Store door position for portal system
             // Door is at the center of the building (x=0 relative to building)
             // Building is at FAR_BUILDINGS_Z, rotated to face forward
-            const doorWorldX = x;
-            const doorWorldZ = PLAZA_CONFIG.FAR_BUILDINGS_Z;
+            const doorWorldX = offset.x + x;
+            const doorWorldZ = offset.z + config.FAR_BUILDINGS_Z;
             
             streetElements.buildingPortals.push({
                 building: building,
                 position: new THREE.Vector3(doorWorldX, 0, doorWorldZ),
                 name: name,
-                style: style
+                style: style,
+                zoneKey: zoneSceneKey,
+                zoneOffset: offset,
+                isFarBuilding: true
             });
             
             farBuildingsGroup.add(building); // Add to far buildings group instead of scene
@@ -2660,10 +2795,13 @@ const createStreetScene = () => {
         console.log("🏕️ Skipped far buildings creation for pond scene");
     }
 
-    // Add NPCs to the scene
-    streetElements.npcs = createNPCs(PLAZA_CONFIG, CURRENT_SCENE, scene);
+    // Add NPCs to the zone (parent = zoneRootGroup so they get zone offset)
+    streetElements.npcs = createNPCs(config, zoneSceneKey, zoneRootGroup);
     
-    console.log("🏁 createStreetScene complete. Returning:", Object.keys(streetElements));
+    // Add zone root to scene
+    scene.add(zoneRootGroup);
+    
+    console.log("🏁 createZoneScene complete for", zoneSceneKey, "Returning:", Object.keys(streetElements));
     return streetElements;
 };
 
@@ -2767,9 +2905,42 @@ if (PLAZA_CONFIG.IS_INTERIOR) {
     streetElements.interactiveItems = interiorGroup.userData.interactiveItems || [];
     
     streetElements.npcs = createInteriorNPCs(CURRENT_SCENE, interiorGroup);
+} else if (UNIFIED_MAP) {
+    // Create unified map - 1000x1000 ground, connector roads, and three populated zones
+    console.log('🗺️ Creating unified map with 9-zone ground, connector roads, and PLAZA, FOREST_SUBURBAN, POND zones');
+    createUnifiedMapGround(scene);
+    createConnectorRoads(scene);
+    const plazaZone = createZoneScene(SCENE_CONFIGS.PLAZA, UNIFIED_MAP_ZONE_OFFSETS.PLAZA, 'PLAZA');
+    const forestZone = createZoneScene(SCENE_CONFIGS.FOREST_SUBURBAN, UNIFIED_MAP_ZONE_OFFSETS.FOREST_SUBURBAN, 'FOREST_SUBURBAN');
+    const pondZone = createZoneScene(SCENE_CONFIGS.POND, UNIFIED_MAP_ZONE_OFFSETS.POND, 'POND');
+    
+    const connectorVehiclesGroup = createConnectorVehicles(scene, createCar, getRandomCarColor);
+    const connectorCars = connectorVehiclesGroup.children.filter(c => c.userData.roadType === 'vertical');
+    
+    // Merge zone results - combine all cars and buses from all zones + connector vehicles
+    streetElements = {
+        ...plazaZone,
+        buildingPortals: [...(plazaZone.buildingPortals || []), ...(forestZone.buildingPortals || []), ...(pondZone.buildingPortals || [])],
+        npcs: [...(plazaZone.npcs || []), ...(forestZone.npcs || []), ...(pondZone.npcs || [])],
+        zoneRootGroups: [plazaZone.zoneRootGroup, forestZone.zoneRootGroup, pondZone.zoneRootGroup],
+        pondElements: pondZone.pondElements,
+        campfire: pondZone.campfire,
+        pond: pondZone.pond,
+        campsiteObjects: pondZone.campsiteObjects,
+        cars: [...(plazaZone.cars || []), ...(forestZone.cars || []), ...(pondZone.cars || []), ...connectorCars],
+        connectorVehiclesGroup,
+        buses: [plazaZone.bus, forestZone.bus, pondZone.bus].filter(Boolean)
+    };
+    streetElements.interactiveItems = [];
+    
+    // Create interior elements for karaoke bar (only in PLAZA zone)
+    interiorElements = createInteriorScene(streetElements.frontShopsGroup);
+    
+    // Use PLAZA config for animation/compatibility refs (cars, bus, etc. from PLAZA zone)
+    console.log('🗺️ Unified map ready. Building portals:', streetElements.buildingPortals?.length, 'NPCs:', streetElements.npcs?.length);
 } else {
-    // Create street scene (exterior)
-    streetElements = createStreetScene();
+    // Create single street scene (exterior) - legacy scene-switching mode
+    streetElements = createZoneScene(PLAZA_CONFIG, { x: 0, z: 0 }, CURRENT_SCENE);
     
     // Initialize interactive items as empty array for exterior scenes
     streetElements.interactiveItems = [];
@@ -2779,8 +2950,8 @@ if (PLAZA_CONFIG.IS_INTERIOR) {
         interiorElements = createInteriorScene(streetElements.frontShopsGroup);
     }
     
-    // Add NPCs
-    streetElements.npcs = createNPCs(PLAZA_CONFIG, CURRENT_SCENE, scene);
+    // Add NPCs (already created by createZoneScene)
+    streetElements.npcs = streetElements.npcs || createNPCs(PLAZA_CONFIG, CURRENT_SCENE, scene);
 }
 
 // Initialize NPC interaction system
@@ -2800,7 +2971,8 @@ const interiorDims = PLAZA_CONFIG.IS_INTERIOR ? streetElements.interiorDimension
 if (interiorDims) {
     console.log(`🏪 Passing interior dimensions to skybox: ${interiorDims.width}x${interiorDims.depth}`);
 }
-const skybox = createSkybox(scene, CURRENT_SCENE, interiorDims);
+const skyboxSceneType = PLAZA_CONFIG.IS_INTERIOR ? CURRENT_SCENE : (UNIFIED_MAP ? 'UNIFIED_MAP' : CURRENT_SCENE);
+const skybox = createSkybox(scene, skyboxSceneType, interiorDims);
 scene.userData.camera = camera;
 
 // =====================================================
@@ -2829,34 +3001,11 @@ document.addEventListener('keydown', (event) => {
             });
             
             if (nearestPortal) {
-                // Get destination scene for building portal
-                const getBuildingPortalDestination = (buildingStyle) => {
-                    const portalMap = {
-                        'groton_church': { key: 'CHURCH_INTERIOR', name: 'Church Interior' },
-                        'groton_townhall': { key: 'TOWNHALL_INTERIOR', name: 'Town Hall Interior' },
-                        'groton_colonial': { key: 'HOUSE_INTERIOR', name: 'Colonial House Interior' },
-                        'graveyard': { key: 'GRAVEYARD_INTERIOR', name: 'Graveyard' },
-                        'hospital': { key: 'HOSPITAL_INTERIOR', name: 'Hospital Interior' },
-                        'modern': { key: 'MODERN_INTERIOR', name: 'Modern Building Interior' },
-                        'brick': { key: 'BRICK_INTERIOR', name: 'Brick Building Interior' },
-                        'shop': { key: 'SHOP_INTERIOR', name: 'Shop Interior' },
-                        'industrial': { key: 'INDUSTRIAL_INTERIOR', name: 'Industrial Building Interior' },
-                        // Shop styles for front shops
-                        'convenience': { key: 'CUMBYS_INTERIOR', name: 'Grumby\'s Store' },
-                        'pizza': { key: 'GROHOS_INTERIOR', name: 'Grohos Pizza' },
-                        'clothing': { key: 'CLOTHING_STORE_INTERIOR', name: 'Clothing Store' },
-                        'drycleaner': { key: 'DRYCLEANER_INTERIOR', name: 'Dry Cleaners' },
-                        'coffee': { key: 'DUNKIN_INTERIOR', name: 'Donut Galaxy' },
-                        'flowers': { key: 'FLOWER_SHOP_INTERIOR', name: 'Flower Shop' }
-                    };
-                    return portalMap[buildingStyle] || { key: 'PLAZA', name: 'Downtown' };
-                };
-                
                 const targetScene = getBuildingPortalDestination(nearestPortal.style);
                 console.log(`Entering ${nearestPortal.name}, switching to ${targetScene.key} (${targetScene.name})`);
                 
-                // Save which exterior scene we came from before switching to interior
-                localStorage.setItem('previousExteriorScene', CURRENT_SCENE);
+                // Save which exterior scene/zone we came from before switching to interior
+                localStorage.setItem('previousExteriorScene', nearestPortal.zoneKey || CURRENT_SCENE);
                 
                 // Save the building portal position so we can return to it when exiting
                 const portalPosition = {
@@ -2868,7 +3017,7 @@ document.addEventListener('keydown', (event) => {
                 
                 // Check if this is a far-side building (at FAR_BUILDINGS_Z)
                 // Far buildings face the street, so when exiting we should face the street (no 180 rotation)
-                const isFarBuilding = Math.abs(nearestPortal.position.z - PLAZA_CONFIG.FAR_BUILDINGS_Z) < 0.1;
+                const isFarBuilding = nearestPortal.isFarBuilding === true;
                 localStorage.setItem('isFarBuilding', isFarBuilding ? 'true' : 'false');
                 console.log(`Saved building portal position: (${portalPosition.x}, ${portalPosition.y}, ${portalPosition.z}), isFarBuilding: ${isFarBuilding}`);
                 
@@ -2893,7 +3042,8 @@ document.addEventListener('keydown', (event) => {
         }
         
         // Fall back to bus stop if no building portal nearby (only for exterior scenes)
-        if (!PLAZA_CONFIG.IS_INTERIOR) {
+        // In UNIFIED_MAP mode, bus stop does NOT trigger scene switch - player walks between zones
+        if (!PLAZA_CONFIG.IS_INTERIOR && !UNIFIED_MAP) {
             // Linear scene progression: PLAZA → FOREST_SUBURBAN → POND → PLAZA
             const busStopX = PLAZA_CONFIG.ROAD_POSITION_X ? PLAZA_CONFIG.ROAD_POSITION_X + 3 : -15;
             const busStopPosition = new THREE.Vector3(busStopX, 0, PLAZA_CONFIG.NEAR_SIDEWALK_Z);
@@ -2949,14 +3099,25 @@ const animate = createAnimationLoop(
             });
         }
         
-        const busStopPosition = new THREE.Vector3(-15, 0, PLAZA_CONFIG.NEAR_SIDEWALK_Z);
-        const distanceToBusStop = camera.position.distanceTo(busStopPosition);
+        // Bus stop position check - in UNIFIED_MAP use nearest of all zone bus stops
+        let distanceToBusStop = Infinity;
+        if (UNIFIED_MAP && streetElements.zoneRootGroups) {
+            streetElements.zoneRootGroups.forEach(zoneRoot => {
+                const zoneConfig = SCENE_CONFIGS[zoneRoot.userData?.zoneKey] || PLAZA_CONFIG;
+                const offset = zoneRoot.userData?.zoneOffset || { x: 0, z: 0 };
+                const busStopPos = new THREE.Vector3(offset.x + (zoneConfig.ROAD_POSITION_X ? zoneConfig.ROAD_POSITION_X + 3 : -15), 0, offset.z + zoneConfig.NEAR_SIDEWALK_Z);
+                const d = camera.position.distanceTo(busStopPos);
+                if (d < distanceToBusStop) distanceToBusStop = d;
+            });
+        } else {
+            distanceToBusStop = camera.position.distanceTo(new THREE.Vector3(-15, 0, PLAZA_CONFIG.NEAR_SIDEWALK_Z));
+        }
         
         if (nearbyNPC) {
             updateMobileActionButton('talk', 'TALK');
         } else if (nearBuildingPortal) {
             updateMobileActionButton('enter', 'ENTER');
-        } else if (distanceToBusStop < 5) {
+        } else if (distanceToBusStop < 5 && !UNIFIED_MAP) {
             updateMobileActionButton('travel', 'TRAVEL');
         } else if (getConversationAtEnd()) {
             updateMobileActionButton('continue', 'CONTINUE');

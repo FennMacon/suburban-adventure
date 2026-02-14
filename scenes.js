@@ -1,5 +1,28 @@
 // scenes.js - Scene configuration and management
 
+// Unified map mode: all three outdoor scenes in one continuous world
+export const UNIFIED_MAP = true;
+
+// Zone offsets for unified map (x, z) - 3x3 grid, 1000x1000 world
+export const UNIFIED_MAP_ZONE_OFFSETS = {
+    PLAZA: { x: 0, z: 0 },
+    FOREST_SUBURBAN: { x: 0, z: 333 },
+    POND: { x: 0, z: -333 }
+};
+
+// 9-zone grid for 1000x1000 map - ground tiles + which zones have content
+export const UNIFIED_MAP_ZONES = [
+    { key: 'ZONE_SW', x: -333, z: -333, groundType: 'grass' },
+    { key: 'PLAZA', x: 0, z: 0, groundType: 'concrete', config: 'PLAZA' },
+    { key: 'ZONE_SE', x: 333, z: -333, groundType: 'grass' },
+    { key: 'ZONE_W', x: -333, z: 0, groundType: 'grass' },
+    { key: 'FOREST_SUBURBAN', x: 0, z: 333, groundType: 'grass', config: 'FOREST_SUBURBAN' },
+    { key: 'ZONE_E', x: 333, z: 0, groundType: 'grass' },
+    { key: 'ZONE_NW', x: -333, z: 333, groundType: 'grass' },
+    { key: 'POND', x: 0, z: -333, groundType: 'grass', config: 'POND' },
+    { key: 'ZONE_NE', x: 333, z: 333, groundType: 'grass' }
+];
+
 // Scene configurations for different environments
 export const SCENE_CONFIGS = {
     // Original plaza scene (current saved state)
@@ -206,6 +229,28 @@ export const SCENE_CONFIGS = {
         EXIT_PORTAL_POSITION: { x: 0, z: 0 }
     }
 };
+
+// Building style -> interior scene mapping (used when entering doors)
+export const BUILDING_PORTAL_MAP = {
+    groton_church: { key: 'CHURCH_INTERIOR', name: 'Church Interior' },
+    groton_townhall: { key: 'TOWNHALL_INTERIOR', name: 'Town Hall Interior' },
+    groton_colonial: { key: 'HOUSE_INTERIOR', name: 'Colonial House Interior' },
+    graveyard: { key: 'GRAVEYARD_INTERIOR', name: 'Graveyard' },
+    hospital: { key: 'HOSPITAL_INTERIOR', name: 'Hospital Interior' },
+    modern: { key: 'MODERN_INTERIOR', name: 'Modern Building Interior' },
+    brick: { key: 'BRICK_INTERIOR', name: 'Brick Building Interior' },
+    shop: { key: 'SHOP_INTERIOR', name: 'Shop Interior' },
+    industrial: { key: 'INDUSTRIAL_INTERIOR', name: 'Industrial Building Interior' },
+    convenience: { key: 'CUMBYS_INTERIOR', name: "Grumby's Store" },
+    pizza: { key: 'GROHOS_INTERIOR', name: 'Grohos Pizza' },
+    clothing: { key: 'CLOTHING_STORE_INTERIOR', name: 'Clothing Store' },
+    drycleaner: { key: 'DRYCLEANER_INTERIOR', name: 'Dry Cleaners' },
+    coffee: { key: 'DUNKIN_INTERIOR', name: 'Donut Galaxy' },
+    flowers: { key: 'FLOWER_SHOP_INTERIOR', name: 'Flower Shop' }
+};
+
+export const getBuildingPortalDestination = (buildingStyle) =>
+    BUILDING_PORTAL_MAP[buildingStyle] || { key: 'PLAZA', name: 'Downtown' };
 
 // Function to switch scenes
 export const switchScene = (sceneName, camera, yaw) => {
