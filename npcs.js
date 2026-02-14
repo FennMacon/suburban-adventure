@@ -1,6 +1,7 @@
 // npcs.js - NPC creation and management
 import * as THREE from 'three';
 import { createWireframeMaterial } from './utils.js';
+import { isMobile } from './controls.js';
 import { INTERIOR_TARGET_SIZE, createGlowingWireframeMaterial } from './buildings.js';
 import { startConversation, getCurrentDialogue, advanceConversation, hasActiveConversation, endConversation, getConversationAtEnd, setConversationAtEnd, unlockCurrentSong, getUnlockedSongs, getCurrentConversationUnlock, isSongUnlocked, markItemEncountered } from './dialogue.js';
 import { triggerPhoneGlow } from './phone-ui.js';
@@ -210,7 +211,7 @@ export const initializeNPCInteraction = () => {
     // Create interaction UI
     interactionUI = document.createElement('div');
     interactionUI.style.position = 'fixed';
-    interactionUI.style.bottom = '20px';
+    interactionUI.style.bottom = isMobile ? '130px' : '20px';
     interactionUI.style.left = '50%';
     interactionUI.style.transform = 'translateX(-50%)';
     interactionUI.style.padding = '20px';
@@ -221,7 +222,7 @@ export const initializeNPCInteraction = () => {
     interactionUI.style.border = '2px solid #88FFE6';
     interactionUI.style.borderRadius = '4px';
     interactionUI.style.display = 'none';
-    interactionUI.style.zIndex = '1000';
+    interactionUI.style.zIndex = isMobile ? '1100' : '1000';
     interactionUI.style.maxWidth = '500px';
     interactionUI.style.textAlign = 'left';
     interactionUI.style.boxShadow = '0 0 10px rgba(136, 255, 230, 0.5)';
@@ -231,7 +232,7 @@ export const initializeNPCInteraction = () => {
     // Create scene switching UI
     sceneSwitchUI = document.createElement('div');
     sceneSwitchUI.style.position = 'fixed';
-    sceneSwitchUI.style.bottom = '80px';
+    sceneSwitchUI.style.bottom = isMobile ? '210px' : '80px';
     sceneSwitchUI.style.left = '50%';
     sceneSwitchUI.style.transform = 'translateX(-50%)';
     sceneSwitchUI.style.color = '#FFFF88';
@@ -241,13 +242,13 @@ export const initializeNPCInteraction = () => {
     sceneSwitchUI.style.padding = '10px';
     sceneSwitchUI.style.borderRadius = '5px';
     sceneSwitchUI.style.display = 'none';
-    sceneSwitchUI.style.zIndex = '1000';
+    sceneSwitchUI.style.zIndex = isMobile ? '1100' : '1000';
     document.body.appendChild(sceneSwitchUI);
     
     // Create nearby item UI (matches sceneSwitchUI styling)
     nearbyItemUI = document.createElement('div');
     nearbyItemUI.style.position = 'fixed';
-    nearbyItemUI.style.bottom = '80px';
+    nearbyItemUI.style.bottom = isMobile ? '210px' : '80px';
     nearbyItemUI.style.left = '50%';
     nearbyItemUI.style.transform = 'translateX(-50%)';
     nearbyItemUI.style.color = '#FFFF88';
@@ -257,7 +258,7 @@ export const initializeNPCInteraction = () => {
     nearbyItemUI.style.padding = '10px';
     nearbyItemUI.style.borderRadius = '5px';
     nearbyItemUI.style.display = 'none';
-    nearbyItemUI.style.zIndex = '1000';
+    nearbyItemUI.style.zIndex = isMobile ? '1100' : '1000';
     document.body.appendChild(nearbyItemUI);
 };
 

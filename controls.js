@@ -1,7 +1,7 @@
 // controls.js - Desktop input only (keyboard, mouse)
 // Mobile touch/joystick logic lives in mobile-controls.js
 import * as THREE from 'three';
-import { getMobileMovement, getMobileLook } from './mobile-controls.js';
+import { getMobileMovement, getMobileLook, getMobileSprint } from './mobile-controls.js';
 
 // Keyboard state
 export const keyboard = {
@@ -129,7 +129,7 @@ export const updateCameraPositionDesktop = (camera, PLAZA_CONFIG = null, streetE
 
 // Update camera - mobile path (touch joysticks)
 export const updateCameraPositionMobile = (camera, PLAZA_CONFIG = null, streetElements = null) => {
-    const speed = moveSpeed;
+    const speed = getMobileSprint() ? moveSpeed * sprintMultiplier : moveSpeed;
     const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw)).normalize();
     const right = new THREE.Vector3(Math.sin(yaw + Math.PI / 2), 0, Math.cos(yaw + Math.PI / 2)).normalize();
 
@@ -142,8 +142,9 @@ export const updateCameraPositionMobile = (camera, PLAZA_CONFIG = null, streetEl
     camera.position.addScaledVector(forward, move.y * speed);
     camera.position.addScaledVector(right, move.x * speed);
 
-    yaw -= look.x * 0.05;
-    pitch -= look.y * 0.05;
+    const lookSensitivity = 0.02;
+    yaw -= look.x * lookSensitivity;
+    pitch -= look.y * lookSensitivity;
     pitch = Math.max(-maxPitch, Math.min(maxPitch, pitch));
 
     camera.rotation.order = 'YXZ';

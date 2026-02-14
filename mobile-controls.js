@@ -13,12 +13,17 @@ let touchControls = {
 };
 
 let mobileActionButton = null;
+let currentActionType = 'run';
+let sprintHeld = false;
 
 // Get movement joystick state (normalized -1 to 1)
 export const getMobileMovement = () => ({
     x: touchControls.joystick.active ? touchControls.joystick.x / JOYSTICK_MAX : 0,
     y: touchControls.joystick.active ? touchControls.joystick.y / JOYSTICK_MAX : 0
 });
+
+// Get sprint state (true when RUN button is held)
+export const getMobileSprint = () => sprintHeld;
 
 // Get look joystick state (normalized -1 to 1)
 export const getMobileLook = () => ({
@@ -29,6 +34,7 @@ export const getMobileLook = () => ({
 // Update mobile action button label and color
 export const updateMobileActionButton = (actionType, actionText) => {
     if (!mobileActionButton) return;
+    currentActionType = actionType;
     mobileActionButton.textContent = actionText;
     const colors = {
         talk: 'rgba(255,100,100,0.8)',
@@ -104,9 +110,21 @@ export const initializeMobileControls = (callbacks = {}) => {
             onAction();
             mobileActionButton.blur();
         };
-        mobileActionButton.addEventListener('click', fireAction);
+        mobileActionButton.addEventListener('click', () => {
+            if (currentActionType !== 'run') fireAction();
+        });
+        mobileActionButton.addEventListener('touchstart', (e) => {
+            if (currentActionType === 'run') {
+                sprintHeld = true;
+                e.preventDefault();
+            }
+        }, { passive: false });
         mobileActionButton.addEventListener('touchend', (e) => {
-            fireAction();
+            if (currentActionType === 'run') {
+                sprintHeld = false;
+            } else {
+                fireAction();
+            }
             e.preventDefault();
         }, { passive: false });
     }
