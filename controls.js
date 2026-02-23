@@ -20,8 +20,8 @@ export let pitch = 0, yaw = 0;
 export const mouseSensitivity = 0.002;
 export const maxPitch = Math.PI / 3;
 
-// Pointer lock state
-export let isPointerLocked = false;
+// Drag-to-look state (no pointer lock = no permission prompt)
+export let isPointerLocked = false;  // Always false; kept for compatibility
 
 // Mobile detection (used by main.js to branch desktop vs mobile init)
 export let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -68,33 +68,27 @@ const setupKeyboardControls = () => {
     });
 };
 
-// Mouse controls (desktop only)
+// Mouse controls (desktop only) - click-and-drag to look (no pointer lock, no permission prompt)
 const setupMouseControls = (canvas) => {
+    let isDragging = false;
+
     const onMouseMove = (event) => {
-        if (isPointerLocked) {
+        if (isDragging && (event.buttons & 1)) {
             yaw -= event.movementX * mouseSensitivity;
             pitch -= event.movementY * mouseSensitivity;
             pitch = Math.max(-maxPitch, Math.min(maxPitch, pitch));
         }
     };
 
-    const onPointerLockChange = () => {
-        isPointerLocked = document.pointerLockElement === canvas;
-    };
+    canvas.addEventListener('mousedown', (event) => {
+        if (event.button === 0) isDragging = true;
+    });
 
-    const onPointerLockError = () => {
-        console.error('Pointer lock error');
-    };
+    document.addEventListener('mouseup', (event) => {
+        if (event.button === 0) isDragging = false;
+    });
 
     document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('pointerlockchange', onPointerLockChange);
-    document.addEventListener('pointerlockerror', onPointerLockError);
-
-    canvas.addEventListener('click', () => {
-        if (!isPointerLocked) {
-            canvas.requestPointerLock();
-        }
-    });
 };
 
 // Apply collision and height clamp (shared)
