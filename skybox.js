@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 
 // Check for unified map mode (avoids circular dep - sceneType is passed as 'UNIFIED_MAP' from main.js)
-const isUnifiedMapScene = (sceneType) => sceneType === 'UNIFIED_MAP';
+const isUnifiedMapScene = (sceneType) => sceneType === 'UNIFIED_MAP' || sceneType === 'CITY_MAP';
 
 // Daylight cycle keyframes: midnight (0), dawn (0.25), noon (0.5), dusk (0.75)
 const DAY_GRADIENT_KEYFRAMES = {
@@ -41,6 +41,9 @@ const DAY_GRADIENT_KEYFRAMES = {
     ]
 };
 
+// Canonical stop positions - unified layout for all phases (fixes jump at boundaries)
+const CANONICAL_STOPS = [0, 0.2, 0.4, 0.5, 0.6, 0.8, 1];
+
 // Interpolate between two color stops
 const interpolateColor = (fromHex, toHex, t) => {
     const fromR = parseInt(fromHex.slice(1, 3), 16) / 255;
@@ -53,6 +56,22 @@ const interpolateColor = (fromHex, toHex, t) => {
     const g = Math.round((fromG + (toG - fromG) * t) * 255);
     const b = Math.round((fromB + (toB - fromB) * t) * 255);
     return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+};
+
+// Sample color at any stop position by interpolating between keyframe's adjacent stops
+const sampleColorAtStop = (keyframeStops, stop) => {
+    if (keyframeStops.length === 0) return '#000000';
+    if (stop <= keyframeStops[0].stop) return keyframeStops[0].color;
+    if (stop >= keyframeStops[keyframeStops.length - 1].stop) return keyframeStops[keyframeStops.length - 1].color;
+    for (let i = 0; i < keyframeStops.length - 1; i++) {
+        const a = keyframeStops[i];
+        const b = keyframeStops[i + 1];
+        if (stop >= a.stop && stop <= b.stop) {
+            const t = (stop - a.stop) / (b.stop - a.stop);
+            return interpolateColor(a.color, b.color, t);
+        }
+    }
+    return keyframeStops[keyframeStops.length - 1].color;
 };
 
 // Get gradient colors for daylight cycle (UNIFIED_MAP only)
@@ -70,10 +89,18 @@ const getGradientColorsForTime = (dayProgress) => {
     const span = 0.25;
     const localProgress = nextIdx === 0 ? dayProgress - positions[idx] : (dayProgress - positions[idx]);
     const t = Math.min(1, Math.max(0, localProgress / span));
-    
-    return fromStops.map((from, i) => ({
-        stop: from.stop,
-        color: interpolateColor(from.color, (toStops[i] || from).color, t)
+    const easedT = t * t * (3 - 2 * t); // smoothstep for softer fade
+    // #region agent log
+    const _lastIdx = getGradientColorsForTime._lastIdx;
+    if (_lastIdx !== undefined && _lastIdx !== idx) {
+        fetch('http://127.0.0.1:7242/ingest/f3d0524f-f482-4ec8-b4f3-8319dd2a9758',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'skybox.js:getGradientColorsForTime',message:'phase boundary crossed',data:{dayProgress,idx,nextIdx,prevIdx:_lastIdx,keyFrom:keys[idx],keyTo:keys[nextIdx],t},hypothesisId:'H3'})}).catch(()=>{});
+    }
+    getGradientColorsForTime._lastIdx = idx;
+    // #endregion
+
+    return CANONICAL_STOPS.map((stop) => ({
+        stop,
+        color: interpolateColor(sampleColorAtStop(fromStops, stop), sampleColorAtStop(toStops, stop), easedT)
     }));
 };
 
@@ -124,6 +151,17 @@ const getGradientColors = (sceneType) => {
                 { stop: 0.7, color: '#4a2c7a' },  // Purple
                 { stop: 0.9, color: '#6b3a8a' }, // Pinkish purple
                 { stop: 1, color: '#8b4a9a' }     // Soft pink-purple at bottom
+            ];
+
+        case 'CITY_MAP':
+            // Urban Allston - darker, streetlight amber glow at horizon
+            return [
+                { stop: 0, color: '#1a1a28' },    // Dark navy at top
+                { stop: 0.3, color: '#1e1e30' },  // Slightly lighter
+                { stop: 0.5, color: '#2a2535' },  // Muted
+                { stop: 0.7, color: '#3a2a45' },  // Urban purple-gray
+                { stop: 0.9, color: '#4a3540' },  // Warm streetlight tint
+                { stop: 1, color: '#5a4035' }      // Amber sodium-vapor at bottom
             ];
             
         // Interior scenes - each with unique color palettes
@@ -328,6 +366,11 @@ const createSkybox = (scene, sceneType = 'PLAZA', interiorDimensions = null) => 
     // Get gradient colors based on scene type
     const colorStops = getGradientColors(sceneType);
     console.log(`🌅 Creating ${sceneType} skybox gradient with ${colorStops.length} color stops`);
+    // #region agent log
+    if (sceneType === 'UNIFIED_MAP') {
+        fetch('http://127.0.0.1:7242/ingest/f3d0524f-f482-4ec8-b4f3-8319dd2a9758',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'skybox.js:createSkybox',message:'UNIFIED_MAP initial gradient',data:{firstColor:colorStops[0]?.color,lastColor:colorStops[colorStops.length-1]?.color},hypothesisId:'H4'})}).catch(()=>{});
+    }
+    // #endregion
     
     // Create vertical gradient from bottom to top
     const gradient = ctx.createLinearGradient(0, 0, 0, 256);
@@ -417,10 +460,22 @@ const redrawGradientTexture = (canvas, colorStops) => {
 
 // Function to update skybox if needed in animation loop
 const updateSkybox = (scene, time, dayProgress = 0) => {
-    if (scene.userData?.sceneType !== 'UNIFIED_MAP') return;
+    const st = scene.userData?.sceneType;
+    if (st !== 'UNIFIED_MAP' && st !== 'CITY_MAP') return;
     const texture = scene.userData.skybox;
     const canvas = scene.userData.skyboxCanvas;
     if (!texture || !canvas) return;
+    
+    const prevProgress = scene.userData._skyLastDayProgress;
+    const isFirstUpdate = prevProgress === undefined;
+    // #region agent log
+    if (isFirstUpdate) {
+        fetch('http://127.0.0.1:7242/ingest/f3d0524f-f482-4ec8-b4f3-8319dd2a9758',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'skybox.js:updateSkybox',message:'first updateSkybox',data:{dayProgress,firstColorStop:getGradientColorsForTime(dayProgress)[0]?.color},hypothesisId:'H4'})}).catch(()=>{});
+    } else if (prevProgress !== undefined && (Math.abs(dayProgress - prevProgress) > 0.08 || (prevProgress > 0.9 && dayProgress < 0.1))) {
+        fetch('http://127.0.0.1:7242/ingest/f3d0524f-f482-4ec8-b4f3-8319dd2a9758',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'skybox.js:updateSkybox',message:'dayProgress jump in updateSkybox',data:{dayProgress,prevProgress,delta:dayProgress-prevProgress},hypothesisId:'H2'})}).catch(()=>{});
+    }
+    scene.userData._skyLastDayProgress = dayProgress;
+    // #endregion
     
     const colorStops = getGradientColorsForTime(dayProgress);
     redrawGradientTexture(canvas, colorStops);

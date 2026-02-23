@@ -2,14 +2,15 @@
 import * as THREE from 'three';
 import { updateNightSky } from './nightsky.js';
 import { updateSkybox } from './skybox.js';
+import { updateZoneFog, updateGroundFog } from './fog.js';
 import { createWireframeMaterial } from './utils.js';
-import { HORIZONTAL_BOUNDS, VERTICAL_BOUNDS, CONNECTOR_X } from './roads.js';
+import { HORIZONTAL_BOUNDS, VERTICAL_BOUNDS, CONNECTOR_X, CITY_CONNECTOR_X, getHorizontalBounds } from './roads.js';
 
 // Animation variables
 export let time = 0;
 let lastTime = 0;
 let dayTime = 0;
-const DAY_LENGTH = 120; // seconds for full day/night cycle
+const DAY_LENGTH = 180; // seconds for full day/night cycle (~45 sec per phase)
 
 // Get average frequency (simplified - no audio)
 const getAverageFrequency = (start, end) => {
@@ -104,8 +105,9 @@ export const animateNeonSigns = (streetElements) => {
 export const animateCars = (streetElements, createCar, getRandomCarColor) => {
     if (!streetElements.cars) return;
     
+    const horizBounds = getHorizontalBounds(streetElements.mapType);
     const carPositions = {};
-    const BOUNDS = { horizontal: HORIZONTAL_BOUNDS, vertical: VERTICAL_BOUNDS };
+    const BOUNDS = { horizontal: horizBounds, vertical: VERTICAL_BOUNDS };
     const speed = 0.05;
     
     // Move existing cars
@@ -179,7 +181,7 @@ export const animateCars = (streetElements, createCar, getRandomCarColor) => {
     if (streetElements.streetElementsGroup && (currentTime - (streetElements.lastCarSpawnTime || 0)) > horizInterval && horizCars.length < 6) {
         const spawnLeft = !streetElements.lastSpawnedLeft;
         streetElements.lastSpawnedLeft = spawnLeft;
-        const spawnX = spawnLeft ? HORIZONTAL_BOUNDS.xMin : HORIZONTAL_BOUNDS.xMax;
+        const spawnX = spawnLeft ? horizBounds.xMin : horizBounds.xMax;
         const spawnZ = spawnLeft ? 2 : -2;
         const canSpawn = !Object.values(carPositions).some(o => o.zoneKey === 'PLAZA' && Math.abs(o.z - spawnZ) < 1 && Math.abs(o.x - spawnX) < 10);
         if (canSpawn) {
@@ -187,16 +189,17 @@ export const animateCars = (streetElements, createCar, getRandomCarColor) => {
             newCar.position.z = spawnZ;
             newCar.userData.roadType = 'horizontal';
             newCar.userData.zoneKey = 'PLAZA';
-            newCar.userData.bounds = { ...HORIZONTAL_BOUNDS };
+            newCar.userData.bounds = { ...horizBounds };
             streetElements.streetElementsGroup.add(newCar);
             streetElements.cars.push(newCar);
             streetElements.lastCarSpawnTime = currentTime;
         }
     }
     
-    if (streetElements.connectorVehiclesGroup && (currentTime - (streetElements.connectorLastCarSpawnTime || 0)) > vertInterval && vertCars.length < 6) {
+    if (streetElements.connectorVehiclesGroup && (currentTime - (streetElements.connectorLastCarSpawnTime || 0)) > vertInterval && vertCars.length < 12) {
         const spawnZ = Math.random() > 0.5 ? VERTICAL_BOUNDS.zMin : VERTICAL_BOUNDS.zMax;
-        const spawnX = Math.random() > 0.5 ? CONNECTOR_X.LEFT : CONNECTOR_X.RIGHT;
+        const connectorPositions = streetElements.mapType === 'city' ? CITY_CONNECTOR_X : [CONNECTOR_X.LEFT, CONNECTOR_X.RIGHT];
+        const spawnX = connectorPositions[Math.floor(Math.random() * connectorPositions.length)];
         const direction = spawnZ < 0 ? 'right' : 'left';
         const newCar = createCar(spawnX, getRandomCarColor(), direction, { vertical: true });
         newCar.position.set(spawnX, 0, spawnZ);
@@ -738,7 +741,8 @@ export const createAnimationLoop = (
     updateMobileActionButton,
     createCar,
     getRandomCarColor,
-    updateDebugInfo
+    updateDebugInfo,
+    isInterior = false
 ) => {
     
     const animate = (currentTime) => {
@@ -756,6 +760,22 @@ export const createAnimationLoop = (
         // Distance-based tree spawn/despawn (unified map only)
         if (streetElements.unifiedMapTrees) {
             streetElements.unifiedMapTrees.update(camera);
+        }
+        // Distance-based triple decker spawn/despawn (city map only)
+        if (streetElements.cityTripleDeckers) {
+            streetElements.cityTripleDeckers.update(camera);
+        }
+        // Distance-based skyline tower spawn/despawn (city map only)
+        if (streetElements.citySkyline) {
+            streetElements.citySkyline.update(camera);
+        }
+
+        // River flow animation (unified map only)
+        if (streetElements.riverUpdate) {
+            streetElements.riverUpdate();
+        }
+        if (streetElements.carnivalUpdate) {
+            streetElements.carnivalUpdate();
         }
         
         // Update debug info
@@ -786,6 +806,8 @@ export const createAnimationLoop = (
         animateCoffeeSteam(scene, deltaTime);
         updateNightSky(scene, time, dayProgress);
         updateSkybox(scene, time, dayProgress);
+        updateZoneFog(scene, camera, streetElements, isInterior);
+        updateGroundFog(scene);
         
         // Render with post-processing (simple pixelation effect)
         renderer.setRenderTarget(renderTarget);

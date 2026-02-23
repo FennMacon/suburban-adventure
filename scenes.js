@@ -3,6 +3,13 @@
 // Unified map mode: all three outdoor scenes in one continuous world
 export const UNIFIED_MAP = true;
 
+// Map mode: suburban (default) or city (Allston-style)
+export const CURRENT_MAP_KEY = 'suburbanAdventureMap';
+export const getCurrentMap = () => localStorage.getItem(CURRENT_MAP_KEY) || 'suburban';
+export const setCurrentMap = (map) => {
+    localStorage.setItem(CURRENT_MAP_KEY, map);
+};
+
 // Zone offsets for unified map (x, z) - 3x3 grid, 1000x1000 world
 export const UNIFIED_MAP_ZONE_OFFSETS = {
     PLAZA: { x: 0, z: 0 },
@@ -13,7 +20,7 @@ export const UNIFIED_MAP_ZONE_OFFSETS = {
 // Get world position for arriving at a zone's bus stop (for unified map bus travel)
 export const getBusStopArrivalPosition = (zoneKey) => {
     const config = SCENE_CONFIGS[zoneKey];
-    const offset = UNIFIED_MAP_ZONE_OFFSETS[zoneKey] || { x: 0, z: 0 };
+    const offset = CITY_MAP_ZONE_OFFSETS?.[zoneKey] ?? UNIFIED_MAP_ZONE_OFFSETS[zoneKey] ?? { x: 0, z: 0 };
     if (!config) return { x: 0, y: 2, z: 0 };
     const busStopX = config.ROAD_POSITION_X ? config.ROAD_POSITION_X + 3 : -15;
     return {
@@ -23,18 +30,59 @@ export const getBusStopArrivalPosition = (zoneKey) => {
     };
 };
 
+// Fog presets for zones without SCENE_CONFIGS (CARNIVAL, MANSION, RIVER, FOREST_CLEARINGS)
+export const FOG_PRESETS = {
+    CARNIVAL: { color: 0x2a1a2e, near: 38, far: 250 },
+    MANSION: { color: 0x1a2520, near: 32, far: 200 },
+    RIVER: { color: 0x1a2230, near: 35, far: 240 },
+    FOREST_CLEARINGS: { color: 0x1a2a1e, near: 35, far: 220 }
+};
+
 // 9-zone grid for 1000x1000 map - ground tiles + which zones have content
+// Left column: Mansion (NW), Hill (W), Forest clearings (SW)
+// Right column: River runs through NE, E, SE
 export const UNIFIED_MAP_ZONES = [
-    { key: 'ZONE_SW', x: -333, z: -333, groundType: 'grass' },
+    { key: 'ZONE_SW', x: -333, z: -333, groundType: 'grass', config: 'FOREST_CLEARINGS' },
     { key: 'PLAZA', x: 0, z: 0, groundType: 'concrete', config: 'PLAZA' },
-    { key: 'ZONE_SE', x: 333, z: -333, groundType: 'grass', config: 'HILL' },
-    { key: 'ZONE_W', x: -333, z: 0, groundType: 'grass' },
+    { key: 'ZONE_SE', x: 333, z: -333, groundType: 'grass', config: 'RIVER' },
+    { key: 'ZONE_W', x: -333, z: 0, groundType: 'grass', config: 'CARNIVAL' },
     { key: 'FOREST_SUBURBAN', x: 0, z: 333, groundType: 'grass', config: 'FOREST_SUBURBAN' },
-    { key: 'ZONE_E', x: 333, z: 0, groundType: 'grass' },
-    { key: 'ZONE_NW', x: -333, z: 333, groundType: 'grass' },
+    { key: 'ZONE_E', x: 333, z: 0, groundType: 'grass', config: 'RIVER' },
+    { key: 'ZONE_NW', x: -333, z: 333, groundType: 'grass', config: 'MANSION' },
     { key: 'POND', x: 0, z: -333, groundType: 'grass', config: 'POND' },
-    { key: 'ZONE_NE', x: 333, z: 333, groundType: 'grass', config: 'MANSION' }
+    { key: 'ZONE_NE', x: 333, z: 333, groundType: 'grass', config: 'RIVER' }
 ];
+
+// 9-zone city map (Allston-style) - asphalt/concrete, no grass
+export const CITY_MAP_ZONES = [
+    { key: 'CITY_NW', x: -333, z: 333, groundType: 'concrete', config: 'TRIPLE_DECKERS' },
+    { key: 'CITY_N', x: 0, z: 333, groundType: 'asphalt', config: 'CITY_COMM_AVE' },
+    { key: 'CITY_NE', x: 333, z: 333, groundType: 'concrete', config: 'RECORD_STRIP' },
+    { key: 'CITY_W', x: -333, z: 0, groundType: 'concrete', config: 'RESIDENTIAL' },
+    { key: 'CITY_PLAZA', x: 0, z: 0, groundType: 'asphalt', config: 'CITY_PLAZA' },
+    { key: 'CITY_E', x: 333, z: 0, groundType: 'concrete', config: 'FOOD_ROW' },
+    { key: 'CITY_SW', x: -333, z: -333, groundType: 'concrete', config: 'URBAN_PARK' },
+    { key: 'CITY_S', x: 0, z: -333, groundType: 'asphalt', config: 'CITY_BRIGHTON_AVE' },
+    { key: 'CITY_SE', x: 333, z: -333, groundType: 'asphalt', config: 'SUBWAY_ENTRANCE' }
+];
+
+export const CITY_MAP_ZONE_OFFSETS = {
+    CITY_PLAZA: { x: 0, z: 0 },
+    CITY_N: { x: 0, z: 333 },
+    CITY_S: { x: 0, z: -333 },
+    CITY_SE: { x: 333, z: -333 }
+};
+
+// Subway stop positions (world x, z) - used for interaction and arrival spawn
+export const SUBWAY_POSITIONS = {
+    suburban: { x: 290, z: -333 },
+    city: { x: 333, z: -290 }
+};
+
+export const getSubwayArrivalPosition = (map) =>
+    map === 'city'
+        ? { x: SUBWAY_POSITIONS.city.x, y: 2, z: SUBWAY_POSITIONS.city.z + 5 }
+        : { x: SUBWAY_POSITIONS.suburban.x, y: 2, z: SUBWAY_POSITIONS.suburban.z + 5 };
 
 // Scene configurations for different environments
 export const SCENE_CONFIGS = {
@@ -60,7 +108,8 @@ export const SCENE_CONFIGS = {
         SUBURBAN_ELEMENTS: false,
         FEWER_BUILDINGS: false,
         STONE_WALL: false,
-        FRONT_IS_PARK: false
+        FRONT_IS_PARK: false,
+        FOG: { color: 0x1a1a2e, near: 40, far: 280 }
     },
 
     // Forest-surrounded suburban scene
@@ -85,7 +134,8 @@ export const SCENE_CONFIGS = {
         SUBURBAN_ELEMENTS: true,
         FEWER_BUILDINGS: true,
         STONE_WALL: true,
-        FRONT_IS_PARK: true
+        FRONT_IS_PARK: true,
+        FOG: { color: 0x1a2a1e, near: 35, far: 220 }
     },
 
     // Deep woods pond scene - post-party campfire vibes
@@ -115,7 +165,85 @@ export const SCENE_CONFIGS = {
         FRONT_IS_POND: true,        // Pond scene specific
         CAMPFIRE_ELEMENTS: true,
         POND_ELEMENTS: true,
-        HAUNTED_ATMOSPHERE: true
+        HAUNTED_ATMOSPHERE: true,
+        FOG: { color: 0x1a1f2e, near: 25, far: 180 }
+    },
+
+    // City map zones (Allston-style)
+    CITY_PLAZA: {
+        name: "Harvard Ave",
+        FRONT_SHOPS_Z: -1,
+        NEAR_SIDEWALK_Z: 2,
+        STREET_Z: 11,
+        FAR_SIDEWALK_Z: 20,
+        FAR_BUILDINGS_Z: 24,
+        PARKING_LOT_Z: 57,
+        CAMERA_START_Z: 21,
+        CAMERA_TARGET_Z: 11,
+        SHOP_ROW_START_X: -60,
+        KARAOKE_BAR_X: 0,
+        SHOP_HEIGHT: 4.5,
+        SHOP_DEPTH: 12,
+        NEAR_SIDEWALK_ELEMENTS: true,
+        STREET_ELEMENTS: true,
+        FAR_SIDEWALK_ELEMENTS: true,
+        FOREST_ELEMENTS: false,
+        SUBURBAN_ELEMENTS: false,
+        FEWER_BUILDINGS: false,
+        STONE_WALL: false,
+        FRONT_IS_PARK: false,
+        URBAN_DENSE: true,
+        FOG: { color: 0x1a1a28, near: 30, far: 220 }
+    },
+    CITY_N: {
+        name: "Commonwealth Ave",
+        FRONT_SHOPS_Z: -1,
+        NEAR_SIDEWALK_Z: 2,
+        STREET_Z: 11,
+        FAR_SIDEWALK_Z: 20,
+        FAR_BUILDINGS_Z: 35,
+        PARKING_LOT_Z: 65,
+        CAMERA_START_Z: 30,
+        CAMERA_TARGET_Z: 11,
+        SHOP_ROW_START_X: -60,
+        KARAOKE_BAR_X: 0,
+        SHOP_HEIGHT: 4.5,
+        SHOP_DEPTH: 12,
+        NEAR_SIDEWALK_ELEMENTS: true,
+        STREET_ELEMENTS: true,
+        FAR_SIDEWALK_ELEMENTS: true,
+        FOREST_ELEMENTS: false,
+        SUBURBAN_ELEMENTS: false,
+        FEWER_BUILDINGS: false,
+        STONE_WALL: false,
+        FRONT_IS_PARK: false,
+        URBAN_DENSE: true,
+        FOG: { color: 0x1a1a28, near: 32, far: 200 }
+    },
+    CITY_S: {
+        name: "Brighton Ave",
+        FRONT_SHOPS_Z: -1,
+        NEAR_SIDEWALK_Z: 2,
+        STREET_Z: 11,
+        FAR_SIDEWALK_Z: 20,
+        FAR_BUILDINGS_Z: 35,
+        PARKING_LOT_Z: 65,
+        CAMERA_START_Z: 30,
+        CAMERA_TARGET_Z: 11,
+        SHOP_ROW_START_X: -60,
+        KARAOKE_BAR_X: 0,
+        SHOP_HEIGHT: 4.5,
+        SHOP_DEPTH: 12,
+        NEAR_SIDEWALK_ELEMENTS: true,
+        STREET_ELEMENTS: true,
+        FAR_SIDEWALK_ELEMENTS: true,
+        FOREST_ELEMENTS: false,
+        SUBURBAN_ELEMENTS: false,
+        FEWER_BUILDINGS: false,
+        STONE_WALL: false,
+        FRONT_IS_PARK: false,
+        URBAN_DENSE: true,
+        FOG: { color: 0x1a1a28, near: 32, far: 200 }
     },
 
     // Interior scenes - shop interiors
@@ -167,6 +295,22 @@ export const SCENE_CONFIGS = {
         CAMERA_TARGET_Z: 0,
         EXIT_PORTAL_POSITION: { x: 0, z: 0 }
     },
+
+    // City map interiors (zone-specific)
+    BODEGA_INTERIOR: { name: "Bodega", IS_INTERIOR: true, INTERIOR_TYPE: 'bodega', CAMERA_START_Z: 0, CAMERA_TARGET_Z: 0, EXIT_PORTAL_POSITION: { x: 0, z: 0 } },
+    PHO_INTERIOR: { name: "Pho House", IS_INTERIOR: true, INTERIOR_TYPE: 'pho', CAMERA_START_Z: 0, CAMERA_TARGET_Z: 0, EXIT_PORTAL_POSITION: { x: 0, z: 0 } },
+    TATTOO_INTERIOR: { name: "Tattoo Parlor", IS_INTERIOR: true, INTERIOR_TYPE: 'tattoo', CAMERA_START_Z: 0, CAMERA_TARGET_Z: 0, EXIT_PORTAL_POSITION: { x: 0, z: 0 } },
+    VINYL_COFFEE_INTERIOR: { name: "Vinyl & Coffee", IS_INTERIOR: true, INTERIOR_TYPE: 'vinyl_coffee', CAMERA_START_Z: 0, CAMERA_TARGET_Z: 0, EXIT_PORTAL_POSITION: { x: 0, z: 0 } },
+    DIVE_BAR_INTERIOR: { name: "Dive Bar", IS_INTERIOR: true, INTERIOR_TYPE: 'dive_bar', CAMERA_START_Z: 0, CAMERA_TARGET_Z: 0, EXIT_PORTAL_POSITION: { x: 0, z: 0 } },
+    RECORD_STORE_INTERIOR: { name: "Record Store", IS_INTERIOR: true, INTERIOR_TYPE: 'record_store', CAMERA_START_Z: 0, CAMERA_TARGET_Z: 0, EXIT_PORTAL_POSITION: { x: 0, z: 0 } },
+    LAUNDROMAT_INTERIOR: { name: "Laundromat", IS_INTERIOR: true, INTERIOR_TYPE: 'laundromat', CAMERA_START_Z: 0, CAMERA_TARGET_Z: 0, EXIT_PORTAL_POSITION: { x: 0, z: 0 } },
+    CORNER_CAFE_INTERIOR: { name: "Corner Cafe", IS_INTERIOR: true, INTERIOR_TYPE: 'corner_cafe', CAMERA_START_Z: 0, CAMERA_TARGET_Z: 0, EXIT_PORTAL_POSITION: { x: 0, z: 0 } },
+    BOOKSHOP_INTERIOR: { name: "Bookshop", IS_INTERIOR: true, INTERIOR_TYPE: 'bookshop', CAMERA_START_Z: 0, CAMERA_TARGET_Z: 0, EXIT_PORTAL_POSITION: { x: 0, z: 0 } },
+    ARCADE_BAR_INTERIOR: { name: "Arcade Bar", IS_INTERIOR: true, INTERIOR_TYPE: 'arcade_bar', CAMERA_START_Z: 0, CAMERA_TARGET_Z: 0, EXIT_PORTAL_POSITION: { x: 0, z: 0 } },
+    SUSHI_INTERIOR: { name: "Sushi Spot", IS_INTERIOR: true, INTERIOR_TYPE: 'sushi', CAMERA_START_Z: 0, CAMERA_TARGET_Z: 0, EXIT_PORTAL_POSITION: { x: 0, z: 0 } },
+    VINTAGE_INTERIOR: { name: "Vintage Threads", IS_INTERIOR: true, INTERIOR_TYPE: 'vintage', CAMERA_START_Z: 0, CAMERA_TARGET_Z: 0, EXIT_PORTAL_POSITION: { x: 0, z: 0 } },
+    BUBBLE_TEA_INTERIOR: { name: "Bubble Tea", IS_INTERIOR: true, INTERIOR_TYPE: 'bubble_tea', CAMERA_START_Z: 0, CAMERA_TARGET_Z: 0, EXIT_PORTAL_POSITION: { x: 0, z: 0 } },
+    SMOKE_SHOP_INTERIOR: { name: "Smoke Shop", IS_INTERIOR: true, INTERIOR_TYPE: 'smoke_shop', CAMERA_START_Z: 0, CAMERA_TARGET_Z: 0, EXIT_PORTAL_POSITION: { x: 0, z: 0 } },
 
     // Interior scenes - far building interiors
     CHURCH_INTERIOR: {
@@ -259,7 +403,22 @@ export const BUILDING_PORTAL_MAP = {
     clothing: { key: 'CLOTHING_STORE_INTERIOR', name: 'Clothing Store' },
     drycleaner: { key: 'DRYCLEANER_INTERIOR', name: 'Dry Cleaners' },
     coffee: { key: 'DUNKIN_INTERIOR', name: 'Donut Galaxy' },
-    flowers: { key: 'FLOWER_SHOP_INTERIOR', name: 'Flower Shop' }
+    flowers: { key: 'FLOWER_SHOP_INTERIOR', name: 'Flower Shop' },
+    // City map shops
+    bodega: { key: 'BODEGA_INTERIOR', name: 'Bodega' },
+    pho: { key: 'PHO_INTERIOR', name: 'Pho House' },
+    tattoo: { key: 'TATTOO_INTERIOR', name: 'Tattoo Parlor' },
+    vinyl_coffee: { key: 'VINYL_COFFEE_INTERIOR', name: 'Vinyl & Coffee' },
+    dive_bar: { key: 'DIVE_BAR_INTERIOR', name: 'Dive Bar' },
+    record_store: { key: 'RECORD_STORE_INTERIOR', name: 'Record Store' },
+    laundromat: { key: 'LAUNDROMAT_INTERIOR', name: 'Laundromat' },
+    corner_cafe: { key: 'CORNER_CAFE_INTERIOR', name: 'Corner Cafe' },
+    bookshop: { key: 'BOOKSHOP_INTERIOR', name: 'Bookshop' },
+    arcade_bar: { key: 'ARCADE_BAR_INTERIOR', name: 'Arcade Bar' },
+    sushi: { key: 'SUSHI_INTERIOR', name: 'Sushi Spot' },
+    vintage: { key: 'VINTAGE_INTERIOR', name: 'Vintage Threads' },
+    bubble_tea: { key: 'BUBBLE_TEA_INTERIOR', name: 'Bubble Tea' },
+    smoke_shop: { key: 'SMOKE_SHOP_INTERIOR', name: 'Smoke Shop' }
 };
 
 export const getBuildingPortalDestination = (buildingStyle) =>

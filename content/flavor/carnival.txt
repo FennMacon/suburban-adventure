@@ -1,0 +1,39 @@
+=== CARNIVAL_COTTON_CANDY ===
+NAME: Cotton Candy Stall
+
+Fluffy pink and blue sugar spun around a paper cone. The smell hits you from ten feet away.
+
+=== CARNIVAL_FRIED_DOUGH ===
+NAME: Fried Dough Stall
+
+Dough dropped in hot oil, dusted with powdered sugar. A Massachusetts carnival staple.
+
+=== CARNIVAL_HOT_DOGS ===
+NAME: Hot Dog Stand
+
+Steamed dogs, yellow mustard, relish. Tastes better at a fair than anywhere else.
+
+=== CARNIVAL_LEMONADE ===
+NAME: Lemonade Stand
+
+Fresh-squeezed lemonade in wax cups. Too sweet, too cold, exactly right.
+
+=== CARNIVAL_FUNNEL_CAKE ===
+NAME: Funnel Cake Booth
+
+Crispy fried dough in a lacy spiral. Powdered sugar everywhere.
+
+=== CARNIVAL_RING_TOSS ===
+NAME: Ring Toss
+
+Wooden pegs and rubber rings. Three tries for a prize.
+
+=== CARNIVAL_BALLOON_DARTS ===
+NAME: Balloon Darts
+
+Colorful balloons pinned to a backboard. Three darts, a dollar.
+
+=== CARNIVAL_BOTTLE_KNOCKDOWN ===
+NAME: Bottle Knockdown
+
+Milk bottles stacked in a pyramid. Throw a ball, knock them down.

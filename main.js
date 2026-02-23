@@ -7,12 +7,13 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 // Import from our new modular files
 import { createWireframeMaterial, createCar, getRandomCarColor, createTree, createBush } from './utils.js';
 import { loadAllContent } from './content-loader.js';
-import { createUnifiedMapGround, createConnectorRoads, createConnectorVehicles, createUnifiedMapTrees, createGroundFog, createForestClearings, createZoneHill, createMansionCompound, createZoneScene } from './world/zone-scene.js';
+import { createUnifiedMapGround, createCityMapGround, createConnectorRoads, createCityConnectorRoads, createConnectorVehicles, createCityConnectorVehicles, createUnifiedMapTrees, createCityTripleDeckers, createCitySkyline, createGroundFog, createForestClearings, createCarnival, createMansionCompound, createRiver, createZoneScene, createSubwayStop, createRecordStrip, createFoodRow, createUrbanPark } from './world/zone-scene.js';
 import { createNightSky, updateNightSky } from './nightsky.js';
 import { createSkybox, updateSkybox } from './skybox.js';
 import { createParkElements, createBuildingFacade, createInteriorScene, createGlowingWireframeMaterial, createPondElements, createShopInterior, INTERIOR_REGISTRY, INTERIOR_TARGET_SIZE } from './buildings.js';
 import { createNPCs, createInteriorNPCs, initializeNPCInteraction, checkNearbyNPCs, checkNearbyItems, checkBusStopProximity, initializeConversationHandlers, getNextSceneInfo, handleInteractionInput } from './npcs.js';
-import { getCurrentScene, getPlazaConfig, SCENE_CONFIGS, UNIFIED_MAP, UNIFIED_MAP_ZONE_OFFSETS, UNIFIED_MAP_ZONES, getBuildingPortalDestination, getBusStopArrivalPosition } from './scenes.js';
+import { getCurrentScene, getPlazaConfig, SCENE_CONFIGS, UNIFIED_MAP, UNIFIED_MAP_ZONE_OFFSETS, UNIFIED_MAP_ZONES, getBuildingPortalDestination, getBusStopArrivalPosition, getCurrentMap, setCurrentMap, getSubwayArrivalPosition, SUBWAY_POSITIONS, CITY_MAP_ZONE_OFFSETS } from './scenes.js';
+import { getFogConfigForZone } from './fog.js';
 import { 
     startConversation, advanceConversation, endConversation, hasActiveConversation, 
     getCurrentDialogue, getUnlockedSongs, checkIfLastLine, unlockCurrentSong, 
@@ -135,15 +136,17 @@ console.log('Scene flags:', {
     HAUNTED_ATMOSPHERE: PLAZA_CONFIG.HAUNTED_ATMOSPHERE
 });
 
-// Adjust fog based on scene atmosphere
+// Adjust fog based on scene - PS2-style zone fog
 // Disable fog for interior scenes
 if (PLAZA_CONFIG.IS_INTERIOR) {
     scene.fog = null;
 } else {
-    const fogColor = PLAZA_CONFIG.HAUNTED_ATMOSPHERE ? 0x1a1f2e : 0x1a1a2e;
-    const fogNear = PLAZA_CONFIG.HAUNTED_ATMOSPHERE ? 30 : 50;
-    const fogFar = UNIFIED_MAP ? 1200 : (PLAZA_CONFIG.HAUNTED_ATMOSPHERE ? 150 : 200);
-    scene.fog = new THREE.Fog(fogColor, fogNear, fogFar);
+    const fogCfg = getCurrentMap() === 'city'
+        ? getFogConfigForZone('CITY_PLAZA', 'CITY_PLAZA')
+        : (UNIFIED_MAP
+            ? getFogConfigForZone('PLAZA', 'PLAZA')
+            : (PLAZA_CONFIG.FOG || getFogConfigForZone(CURRENT_SCENE, CURRENT_SCENE)));
+    scene.fog = new THREE.Fog(fogCfg.color, fogCfg.near, fogCfg.far);
 }
 
 // Scene switching function
@@ -308,6 +311,43 @@ if (PLAZA_CONFIG.IS_INTERIOR) {
     streetElements.interactiveItems = interiorGroup.userData.interactiveItems || [];
     
     streetElements.npcs = createInteriorNPCs(CURRENT_SCENE, interiorGroup);
+} else if (getCurrentMap() === 'city') {
+    // City map (Allston-style) - 9 zones, 3 main street zones
+    console.log('🗺️ Creating city map with 9-zone ground, connector roads, and CITY_PLAZA, CITY_N, CITY_S zones');
+    createCityMapGround(scene);
+    createGroundFog(scene);
+    createCityConnectorRoads(scene);
+    const cityTripleDeckers = createCityTripleDeckers(scene);
+    const citySkyline = createCitySkyline(scene);
+    createRecordStrip(scene);
+    createFoodRow(scene);
+    createUrbanPark(scene);
+    const cityPlazaZone = createZoneScene(scene, SCENE_CONFIGS.CITY_PLAZA, CITY_MAP_ZONE_OFFSETS.CITY_PLAZA, 'CITY_PLAZA');
+    const cityNorthZone = createZoneScene(scene, SCENE_CONFIGS.CITY_N, CITY_MAP_ZONE_OFFSETS.CITY_N, 'CITY_N');
+    const citySouthZone = createZoneScene(scene, SCENE_CONFIGS.CITY_S, CITY_MAP_ZONE_OFFSETS.CITY_S, 'CITY_S');
+    
+    const connectorVehiclesGroup = createCityConnectorVehicles(scene, createCar, getRandomCarColor);
+    const connectorCars = connectorVehiclesGroup.children.filter(c => c.userData.roadType === 'vertical');
+
+    const subwayStop = createSubwayStop(SUBWAY_POSITIONS.city.x, SUBWAY_POSITIONS.city.z);
+    scene.add(subwayStop);
+    
+    streetElements = {
+        ...cityPlazaZone,
+        cityTripleDeckers,
+        citySkyline,
+        buildingPortals: [...(cityPlazaZone.buildingPortals || []), ...(cityNorthZone.buildingPortals || []), ...(citySouthZone.buildingPortals || [])],
+        npcs: [...(cityPlazaZone.npcs || []), ...(cityNorthZone.npcs || []), ...(citySouthZone.npcs || [])],
+        zoneRootGroups: [cityPlazaZone.zoneRootGroup, cityNorthZone.zoneRootGroup, citySouthZone.zoneRootGroup],
+        cars: [...(cityPlazaZone.cars || []), ...(cityNorthZone.cars || []), ...(citySouthZone.cars || []), ...connectorCars],
+        connectorVehiclesGroup,
+        buses: [cityPlazaZone.bus, cityNorthZone.bus, citySouthZone.bus].filter(Boolean),
+        subwayStopPosition: SUBWAY_POSITIONS.city,
+        mapType: 'city'
+    };
+    streetElements.interactiveItems = [];
+    interiorElements = createInteriorScene(streetElements.frontShopsGroup);
+    console.log('🗺️ City map ready.');
 } else if (UNIFIED_MAP) {
     // Create unified map - 1000x1000 ground, connector roads, and three populated zones
     console.log('🗺️ Creating unified map with 9-zone ground, connector roads, and PLAZA, FOREST_SUBURBAN, POND zones');
@@ -315,12 +355,16 @@ if (PLAZA_CONFIG.IS_INTERIOR) {
     createGroundFog(scene);
     createConnectorRoads(scene);
     const clearingResult = createForestClearings(scene);
-    createZoneHill(scene);
+    const carnivalResult = createCarnival(scene);
     const mansionResult = createMansionCompound(scene);
+    const riverResult = createRiver(scene);
     const unifiedMapTrees = createUnifiedMapTrees(scene);
     const plazaZone = createZoneScene(scene, SCENE_CONFIGS.PLAZA, UNIFIED_MAP_ZONE_OFFSETS.PLAZA, 'PLAZA');
     const forestZone = createZoneScene(scene, SCENE_CONFIGS.FOREST_SUBURBAN, UNIFIED_MAP_ZONE_OFFSETS.FOREST_SUBURBAN, 'FOREST_SUBURBAN');
     const pondZone = createZoneScene(scene, SCENE_CONFIGS.POND, UNIFIED_MAP_ZONE_OFFSETS.POND, 'POND');
+    
+    const subwayStop = createSubwayStop(SUBWAY_POSITIONS.suburban.x, SUBWAY_POSITIONS.suburban.z);
+    scene.add(subwayStop);
     
     const connectorVehiclesGroup = createConnectorVehicles(scene, createCar, getRandomCarColor);
     const connectorCars = connectorVehiclesGroup.children.filter(c => c.userData.roadType === 'vertical');
@@ -328,6 +372,9 @@ if (PLAZA_CONFIG.IS_INTERIOR) {
     // Merge zone results - combine all cars and buses from all zones + connector vehicles
     streetElements = {
         ...plazaZone,
+        mapType: 'suburban',
+        riverUpdate: riverResult?.updateFlow,
+        carnivalUpdate: carnivalResult?.updateCarnival,
         unifiedMapTrees,
         buildingPortals: [...(plazaZone.buildingPortals || []), ...(forestZone.buildingPortals || []), ...(pondZone.buildingPortals || [])],
         npcs: [...(plazaZone.npcs || []), ...(forestZone.npcs || []), ...(pondZone.npcs || [])],
@@ -338,10 +385,12 @@ if (PLAZA_CONFIG.IS_INTERIOR) {
         campsiteObjects: pondZone.campsiteObjects,
         cars: [...(plazaZone.cars || []), ...(forestZone.cars || []), ...(pondZone.cars || []), ...connectorCars],
         connectorVehiclesGroup,
-        buses: [plazaZone.bus, forestZone.bus, pondZone.bus].filter(Boolean)
+        buses: [plazaZone.bus, forestZone.bus, pondZone.bus].filter(Boolean),
+        subwayStopPosition: SUBWAY_POSITIONS.suburban
     };
     streetElements.interactiveItems = [
         ...(clearingResult?.interactiveItems || []),
+        ...(carnivalResult?.interactiveItems || []),
         ...(mansionResult?.interactiveItems || [])
     ];
     
@@ -416,6 +465,13 @@ const handleActionInput = () => {
         }
     }
 
+    // Subway travel - switch between suburban and city maps (same as "t" key)
+    if (streetElements?.subwayStopPosition) {
+        const subwayPos = streetElements.subwayStopPosition;
+        const dist = camera.position.distanceTo(new THREE.Vector3(subwayPos.x, 0, subwayPos.z));
+        if (dist < 6 && performMapSwitch()) return;
+    }
+
     // Bus stop travel - UNIFIED_MAP
     if (!PLAZA_CONFIG.IS_INTERIOR && UNIFIED_MAP && streetElements?.zoneRootGroups) {
         let nearestZone = null;
@@ -474,14 +530,40 @@ const interiorDims = PLAZA_CONFIG.IS_INTERIOR ? streetElements.interiorDimension
 if (interiorDims) {
     console.log(`🏪 Passing interior dimensions to skybox: ${interiorDims.width}x${interiorDims.depth}`);
 }
-const skyboxSceneType = PLAZA_CONFIG.IS_INTERIOR ? CURRENT_SCENE : (UNIFIED_MAP ? 'UNIFIED_MAP' : CURRENT_SCENE);
+const skyboxSceneType = PLAZA_CONFIG.IS_INTERIOR ? CURRENT_SCENE : (getCurrentMap() === 'city' ? 'CITY_MAP' : (UNIFIED_MAP ? 'UNIFIED_MAP' : CURRENT_SCENE));
 const skybox = createSkybox(scene, skyboxSceneType, interiorDims);
 scene.userData.camera = camera;
+
+// Switch between suburban and city maps (same as subway travel)
+const performMapSwitch = () => {
+    if (PLAZA_CONFIG.IS_INTERIOR) return false;
+    const currentMap = getCurrentMap();
+    if (currentMap === 'suburban') {
+        setCurrentMap('city');
+        localStorage.setItem('suburbanAdventureScene', 'CITY_PLAZA');
+        localStorage.setItem('busStopCameraPosition', JSON.stringify(getSubwayArrivalPosition('city')));
+        console.log('🚇 Travelling to Allston');
+        location.reload();
+        return true;
+    } else if (currentMap === 'city') {
+        setCurrentMap('suburban');
+        localStorage.setItem('suburbanAdventureScene', 'PLAZA');
+        localStorage.setItem('busStopCameraPosition', JSON.stringify(getSubwayArrivalPosition('suburban')));
+        console.log('🚇 Travelling to the suburbs');
+        location.reload();
+        return true;
+    }
+    return false;
+};
 
 // =====================================================
 // KEYBOARD EVENT HANDLERS
 // =====================================================
 document.addEventListener('keydown', (event) => {
+    const inInput = document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA';
+    if (event.code === 'KeyT' && !event.ctrlKey && !event.metaKey && !event.altKey && !inInput) {
+        if (performMapSwitch()) return;
+    }
     if (event.code === 'Space' || event.code === 'KeyF') {
         handleActionInput();
     }
@@ -528,6 +610,13 @@ const animate = createAnimationLoop(
             });
         }
         
+        // Subway check (before bus stop)
+        let distanceToSubway = Infinity;
+        if (streetElements?.subwayStopPosition) {
+            const sp = streetElements.subwayStopPosition;
+            distanceToSubway = camera.position.distanceTo(new THREE.Vector3(sp.x, 0, sp.z));
+        }
+
         // Bus stop position check - in UNIFIED_MAP use nearest of all zone bus stops
         let distanceToBusStop = Infinity;
         if (UNIFIED_MAP && streetElements.zoneRootGroups) {
@@ -546,6 +635,8 @@ const animate = createAnimationLoop(
             updateMobileActionButton('talk', 'TALK');
         } else if (nearBuildingPortal) {
             updateMobileActionButton('enter', 'ENTER');
+        } else if (distanceToSubway < 6) {
+            updateMobileActionButton('travel', 'TRAVEL');
         } else if (distanceToBusStop < 5) {
             updateMobileActionButton('travel', 'TRAVEL');
         } else if (getConversationAtEnd()) {
@@ -556,7 +647,8 @@ const animate = createAnimationLoop(
     },
     createCar,
     getRandomCarColor,
-    updateDebugInfo
+    updateDebugInfo,
+    PLAZA_CONFIG.IS_INTERIOR
 );
 
 // Start the animation loop

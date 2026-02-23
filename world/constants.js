@@ -21,7 +21,12 @@ export const GROUND_COLORS = {
     grass_forest: 0x228B22,
     grass_pond: 0x1B4D3E,
     grass_mansion: 0x2d6b2d,
-    grass_hill: 0x225522
+    grass_hill: 0x225522,
+    grass_carnival: 0x3a5a2a,
+    water_river: 0x2a5075,
+    asphalt_dark: 0x3a3a3a,
+    asphalt_light: 0x4a4a4a,
+    concrete_urban: 0x606060
 };
 
 /** Zone tile size for unified map */

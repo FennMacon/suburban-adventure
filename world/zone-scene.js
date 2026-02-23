@@ -2,21 +2,108 @@
 import * as THREE from 'three';
 import { createWireframeMaterial, createCar, getRandomCarColor, createTree, createBush } from '../utils.js';
 import { getFlavorContent } from '../content-loader.js';
-import { createBuildingFacade, createParkElements, createPondElements } from '../buildings.js';
+import { createBuildingFacade, createParkElements, createPondElements, createTripleDeckerBuilding, createSimpleTower } from '../buildings.js';
 import { createNPCs } from '../npcs.js';
-import { UNIFIED_MAP_ZONES, UNIFIED_MAP, UNIFIED_MAP_ZONE_OFFSETS } from '../scenes.js';
-import { HORIZONTAL_BOUNDS, VERTICAL_BOUNDS, CONNECTOR_X, ZONE_STREET_WIDTH, ZONE_STREET_X_MIN, ZONE_STREET_X_MAX } from '../roads.js';
+import { UNIFIED_MAP_ZONES, UNIFIED_MAP, UNIFIED_MAP_ZONE_OFFSETS, CITY_MAP_ZONES } from '../scenes.js';
+import { HORIZONTAL_BOUNDS, VERTICAL_BOUNDS, CONNECTOR_X, ZONE_STREET_WIDTH, ZONE_STREET_X_MIN, ZONE_STREET_X_MAX, SUBURBAN_ZONE_STREET_WIDTH, SUBURBAN_ZONE_STREET_X_MAX, SUBURBAN_LEFT_CORNER_X, SUBURBAN_LEFT_OUTER_CORNER_X, SUBURBAN_HORIZONTAL_BOUNDS, CITY_CONNECTOR_X, CITY_HORIZONTAL_Z } from '../roads.js';
 import { GROUND_COLORS, ZONE_SIZE, GROUND_LAYERS, STREET_WIDTH, STREET_DEPTH, SIDEWALK_WIDTH, SIDEWALK_DEPTH, PARKING_WIDTH, PARKING_DEPTH, CONNECTOR_ROAD_WIDTH, CONNECTOR_ROAD_LENGTH, CONNECTOR_SIDEWALK_DEPTH, CONNECTOR_CORRIDOR_WIDTH, JUNCTION_WIDTH, JUNCTION_DEPTH } from './constants.js';
 
-/** ZONE_SE hill - center and radius for tree exclusions */
-const ZONE_SE_HILL = { x: 333, z: -333, radius: 105 };
-
-/** ZONE_NE mansion compound - bounds for tree exclusions */
-const ZONE_NE_MANSION = {
-    x: 333,
+/** ZONE_NW mansion compound - bounds for tree exclusions (left column, top) */
+const ZONE_NW_MANSION = {
+    x: -333,
     z: 333,
     width: 90,
     depth: 70
+};
+
+/** ZONE_W carnival - center and radius (left column, middle) */
+const ZONE_W_CARNIVAL = { x: -333, z: 0, radius: 105 };
+/** PLAZA street runs through carnival at z=11; avoid z 0–22 for stalls/rides */
+const CARNIVAL_ROAD_Z = 11;
+const CARNIVAL_ROAD_BUFFER = 22;
+const CARNIVAL_ROAD_EXCLUSION = { zMin: 0, zMax: 22 };
+
+/** ZONE_SW forest clearings - positions, types, exclusions (left column, bottom) */
+const ZONE_SW_CLEARING_CONFIG = [
+    { id: 'chair', x: -450, z: -466, type: 'chair', radius: 14, contentId: 'CLEARING_EMPTY_CHAIR' },
+    { id: 'lamp', x: -420, z: -386, type: 'lamp', radius: 14, contentId: 'CLEARING_STREET_LAMP' },
+    { id: 'stoneCircle', x: -380, z: -316, type: 'stoneCircle', radius: 14, contentId: 'CLEARING_STONE_CIRCLE' },
+    { id: 'oddPatch', x: -350, z: -246, type: 'oddPatch', radius: 14, contentId: 'CLEARING_ODD_CHAIR' },
+    { id: 'emptyTable', x: -280, z: -196, type: 'emptyTable', radius: 14, contentId: 'CLEARING_EMPTY_TABLE' },
+    { id: 'trafficCone', x: -240, z: -366, type: 'trafficCone', radius: 10, contentId: 'CLEARING_TRAFFIC_CONE' },
+    { id: 'shoppingCart', x: -220, z: -466, type: 'shoppingCart', radius: 12, contentId: 'CLEARING_SHOPPING_CART' }
+];
+
+const ZONE_SW_PATH_WAYPOINTS = [
+    { x: -230, z: -491 },
+    { x: -220, z: -466 },
+    { x: -450, z: -466 },
+    { x: -420, z: -386 },
+    { x: -380, z: -316 },
+    { x: -350, z: -246 },
+    { x: -280, z: -196 },
+    { x: -240, z: -366 },
+    { x: -230, z: -446 }
+];
+
+/** River on right side - runs through ZONE_NE, ZONE_E, ZONE_SE */
+const RIVER_CONFIG = {
+    x: 333,
+    halfWidth: 20,
+    zMin: -500,
+    zMax: 500
+};
+
+/** Suburban PLAZA shops (Grumby's, Grohos, etc.) - used only for PLAZA zone */
+const PLAZA_SHOPS = [
+    { name: 'Grumby\'s', width: 18, style: 'convenience', signColor: 0xFFFFFF },
+    { name: 'Grohos', width: 16, style: 'pizza', signColor: 0xFFFFFF },
+    { name: 'Clothing Store', width: 14, style: 'clothing', signColor: 0xFFFFFF },
+    { name: 'Dry Cleaners', width: 12, style: 'drycleaner', signColor: 0x000000 },
+    { name: 'Donut Galaxy', width: 15, style: 'coffee', signColor: 0xFFFFFF },
+    { name: 'Flower Shop', width: 13, style: 'flowers', signColor: 0x000000 }
+];
+
+/** City zone shop configs - unique establishments per street */
+const CITY_ZONE_SHOPS = {
+    CITY_PLAZA: {
+        centerBar: 'karaoke',
+        shops: [
+            { name: 'Bodega', width: 14, style: 'bodega', signColor: 0xFF6600 },
+            { name: 'Pho House', width: 16, style: 'pho', signColor: 0xFFFFFF },
+            { name: 'Tattoo Parlor', width: 12, style: 'tattoo', signColor: 0x000000 },
+            { name: 'Vinyl & Coffee', width: 15, style: 'vinyl_coffee', signColor: 0x333333 }
+        ]
+    },
+    CITY_N: {
+        centerBar: 'dive_bar',
+        shops: [
+            { name: 'Record Store', width: 14, style: 'record_store', signColor: 0xFF0000 },
+            { name: 'Laundromat', width: 16, style: 'laundromat', signColor: 0x00AAFF },
+            { name: 'Corner Cafe', width: 13, style: 'corner_cafe', signColor: 0xFFFFFF },
+            { name: 'Bookshop', width: 12, style: 'bookshop', signColor: 0x8B4513 }
+        ]
+    },
+    CITY_S: {
+        centerBar: 'arcade_bar',
+        shops: [
+            { name: 'Sushi Spot', width: 14, style: 'sushi', signColor: 0xFF6666 },
+            { name: 'Vintage Threads', width: 15, style: 'vintage', signColor: 0x996633 },
+            { name: 'Bubble Tea', width: 12, style: 'bubble_tea', signColor: 0xFFB6C1 },
+            { name: 'Smoke Shop', width: 13, style: 'smoke_shop', signColor: 0x228B22 }
+        ]
+    }
+};
+
+/** Get shops and center bar type for a zone. Suburban PLAZA uses original shops + karaoke. */
+const getShopsForZone = (zoneSceneKey) => {
+    if (CITY_ZONE_SHOPS[zoneSceneKey]) {
+        return CITY_ZONE_SHOPS[zoneSceneKey];
+    }
+    if (zoneSceneKey === 'PLAZA') {
+        return { centerBar: 'karaoke', shops: PLAZA_SHOPS };
+    }
+    return null;
 };
 
 export const createUnifiedMapGround = (scene) => {
@@ -40,7 +127,9 @@ export const createUnifiedMapGround = (scene) => {
         const hex = zone.config === 'FOREST_SUBURBAN' ? GROUND_COLORS.grass_forest :
                     zone.config === 'POND' ? GROUND_COLORS.grass_pond :
                     zone.config === 'MANSION' ? GROUND_COLORS.grass_mansion :
-                    zone.config === 'HILL' ? GROUND_COLORS.grass_hill :
+                    zone.config === 'CARNIVAL' ? GROUND_COLORS.grass_carnival :
+                    zone.config === 'FOREST_CLEARINGS' ? GROUND_COLORS.grass_forest :
+                    zone.config === 'RIVER' ? GROUND_COLORS.water_river :
                     colorMap[zone.groundType] || GROUND_COLORS.grass;
         return { x: zone.x, z: zone.z, color: new THREE.Color(hex) };
     });
@@ -85,14 +174,93 @@ export const createUnifiedMapGround = (scene) => {
 
     const material = new THREE.MeshBasicMaterial({
         vertexColors: true,
-        transparent: true,
-        opacity: 0.9,
-        side: THREE.DoubleSide
+        transparent: false,
+        opacity: 1,
+        side: THREE.DoubleSide,
+        depthWrite: true
     });
     const ground = new THREE.Mesh(geometry, material);
     ground.rotation.x = -Math.PI / 2;
     ground.position.set(0, GROUND_LAYERS.base, 0);
     ground.name = "UnifiedMapGroundPlane";
+    groundGroup.add(ground);
+
+    scene.add(groundGroup);
+    return groundGroup;
+};
+
+/** City map ground - urban asphalt/concrete, no grass */
+export const createCityMapGround = (scene) => {
+    const groundGroup = new THREE.Group();
+    groundGroup.name = "CityMapGround";
+
+    const MAP_SIZE = 1000;
+    const SEGMENTS = 64;
+    const TRANSITION_WIDTH = 100;
+
+    const geometry = new THREE.PlaneGeometry(MAP_SIZE, MAP_SIZE, SEGMENTS, SEGMENTS);
+    const positions = geometry.attributes.position;
+    const colors = new Float32Array(positions.count * 3);
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+    const zoneData = CITY_MAP_ZONES.map((zone) => {
+        const hex = zone.groundType === 'asphalt'
+            ? (zone.config === 'CITY_PLAZA' || zone.config === 'CITY_N' || zone.config === 'CITY_S'
+                ? GROUND_COLORS.asphalt_light
+                : GROUND_COLORS.asphalt_dark)
+            : GROUND_COLORS.concrete_urban;
+        return { x: zone.x, z: zone.z, color: new THREE.Color(hex) };
+    });
+
+    const blendRadius = TRANSITION_WIDTH + ZONE_SIZE / 2;
+
+    for (let i = 0; i < positions.count; i++) {
+        const px = positions.getX(i);
+        const py = positions.getY(i);
+        const worldX = px;
+        const worldZ = -py;
+
+        let r = 0, g = 0, b = 0;
+        let totalWeight = 0;
+
+        for (const zone of zoneData) {
+            const dx = worldX - zone.x;
+            const dz = worldZ - zone.z;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            const weight = Math.max(0, 1 - dist / blendRadius);
+            totalWeight += weight;
+            r += zone.color.r * weight;
+            g += zone.color.g * weight;
+            b += zone.color.b * weight;
+        }
+
+        if (totalWeight > 0) {
+            r /= totalWeight;
+            g /= totalWeight;
+            b /= totalWeight;
+        } else {
+            const fallback = zoneData[0].color;
+            r = fallback.r;
+            g = fallback.g;
+            b = fallback.b;
+        }
+
+        colors[i * 3] = r;
+        colors[i * 3 + 1] = g;
+        colors[i * 3 + 2] = b;
+    }
+
+    const material = new THREE.MeshBasicMaterial({
+        vertexColors: true,
+        transparent: false,
+        opacity: 1,
+        side: THREE.DoubleSide,
+        depthWrite: true
+    });
+    const ground = new THREE.Mesh(geometry, material);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.set(0, GROUND_LAYERS.base, 0);
+    ground.name = "CityMapGroundPlane";
     groundGroup.add(ground);
 
     scene.add(groundGroup);
@@ -106,7 +274,7 @@ export const createGroundFog = (scene) => {
     const fogMaterial = new THREE.MeshBasicMaterial({
         color: fogColor,
         transparent: true,
-        opacity: 0.2,
+        opacity: 0.35,
         side: THREE.DoubleSide,
         depthWrite: false
     });
@@ -117,31 +285,6 @@ export const createGroundFog = (scene) => {
     scene.add(fogPlane);
     return fogPlane;
 };
-
-// ZONE_NW forest clearings - single source of truth for positions, types, exclusions
-/** Config for each clearing: world coords, type, radius for tree exclusion, contentId for flavor text */
-const ZONE_NW_CLEARING_CONFIG = [
-    { id: 'chair', x: -450, z: 200, type: 'chair', radius: 14, contentId: 'CLEARING_EMPTY_CHAIR' },
-    { id: 'lamp', x: -420, z: 280, type: 'lamp', radius: 14, contentId: 'CLEARING_STREET_LAMP' },
-    { id: 'stoneCircle', x: -380, z: 350, type: 'stoneCircle', radius: 14, contentId: 'CLEARING_STONE_CIRCLE' },
-    { id: 'oddPatch', x: -350, z: 420, type: 'oddPatch', radius: 14, contentId: 'CLEARING_ODD_CHAIR' },
-    { id: 'emptyTable', x: -280, z: 470, type: 'emptyTable', radius: 14, contentId: 'CLEARING_EMPTY_TABLE' },
-    { id: 'trafficCone', x: -240, z: 300, type: 'trafficCone', radius: 10, contentId: 'CLEARING_TRAFFIC_CONE' },
-    { id: 'shoppingCart', x: -220, z: 200, type: 'shoppingCart', radius: 12, contentId: 'CLEARING_SHOPPING_CART' }
-];
-
-/** Path waypoints connecting clearings - walking route from south entry through all clearings */
-const ZONE_NW_PATH_WAYPOINTS = [
-    { x: -230, z: 175 },   // Entry from connector side
-    { x: -220, z: 200 },   // shoppingCart
-    { x: -450, z: 200 },   // chair
-    { x: -420, z: 280 },   // lamp
-    { x: -380, z: 350 },   // stoneCircle
-    { x: -350, z: 420 },   // oddPatch
-    { x: -280, z: 470 },   // emptyTable
-    { x: -240, z: 300 },   // trafficCone
-    { x: -230, z: 220 }    // Exit toward connector
-];
 
 const createWoodsChair = (mat) => {
     const group = new THREE.Group();
@@ -305,7 +448,7 @@ const addPathSegments = (group, waypoints, pathMat, pathWidth = 3.5, pathY = -0.
     }
 };
 
-/** Forest clearings in ZONE_NW. Trees excluded via createUnifiedMapTrees. */
+/** Forest clearings in ZONE_SW (left column, bottom). Trees excluded via createUnifiedMapTrees. */
 export const createForestClearings = (scene) => {
     const group = new THREE.Group();
     group.name = "ForestClearings";
@@ -313,9 +456,9 @@ export const createForestClearings = (scene) => {
     const interactiveItems = [];
 
     const pathMat = createWireframeMaterial(0x3E3A32);
-    addPathSegments(group, ZONE_NW_PATH_WAYPOINTS, pathMat);
+    addPathSegments(group, ZONE_SW_PATH_WAYPOINTS, pathMat);
 
-    for (const c of ZONE_NW_CLEARING_CONFIG) {
+    for (const c of ZONE_SW_CLEARING_CONFIG) {
         const prop = createPropByType(c.type, mat);
         prop.position.set(c.x, 0, c.z);
         const content = getFlavorContent(c.contentId);
@@ -330,69 +473,347 @@ export const createForestClearings = (scene) => {
     return { group, interactiveItems };
 };
 
-/** Big hill in ZONE_SE - rural outskirts landmark. Separate mesh overlay (ground is flat). */
-export const createZoneHill = (scene) => {
+/** Carnival in ZONE_W - Ferris wheel, Zipper, swings, teacups, stalls.
+ * Ferris: Eli Bridge–style circular rim, 16 spoke pairs, drive rims, A-frame towers.
+ * Zipper: Chance Rides 1968 - 56ft vertical oval boom, 12 wire-mesh cages, cable-driven,
+ * dual rotation (boom 7.5 rpm, cars ~4 rpm), chaotic tumbling.
+ * Swings: 12 seats, centrifugal swing physics, crown hub, loading platform.
+ * Teacups: 6 cups on turntable, dual rotation (platform + per-cup spin). */
+export const createCarnival = (scene) => {
     const group = new THREE.Group();
-    group.name = "ZoneHill";
+    group.name = "Carnival";
+    const { x: cx, z: cz } = ZONE_W_CARNIVAL;
+    const mat = (c, o = 1) => createWireframeMaterial(c, o);
+    const interactiveItems = [];
 
-    const { x, z } = ZONE_SE_HILL;
-    const bottomRadius = 100;
-    const topRadius = 40;
-    const height = 22;
-    const segments = 24;
-
-    const hillGeometry = new THREE.CylinderGeometry(topRadius, bottomRadius, height, segments);
-    const hillMaterial = new THREE.MeshBasicMaterial({
-        color: 0x256325,
-        transparent: true,
-        opacity: 0.95
+    // --- FERRIS WHEEL (circular rim, Eli Bridge–style: 16 spoke pairs, drive rims) ---
+    const ferrisGroup = new THREE.Group();
+    ferrisGroup.name = "FerrisWheel";
+    ferrisGroup.position.set(cx - 25, 8, cz - 40);
+    const ferrisWheelRotating = new THREE.Group();
+    ferrisWheelRotating.position.set(0, 15, 0);
+    const fRadius = 12;  // circular rim radius
+    const placeOnCircle = (a) => ({ y: Math.cos(a) * fRadius, z: Math.sin(a) * fRadius });
+    const SPOKE_PAIRS = 16;
+    for (let i = 0; i < SPOKE_PAIRS; i++) {
+        const a = (i / SPOKE_PAIRS) * Math.PI * 2;
+        const p = placeOnCircle(a);
+        const spokeLen = Math.hypot(p.y, p.z);
+        // Pair of spokes (slight offset for depth)
+        for (const xOff of [-0.15, 0.15]) {
+            const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.15, spokeLen, 0.15), mat(0xFFFF00));
+            spoke.position.set(xOff, p.y / 2, p.z / 2);
+            spoke.rotation.x = -Math.atan2(p.z, p.y);
+            ferrisWheelRotating.add(spoke);
+        }
+        const gondola = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1, 1.2), mat(0x0066FF));
+        gondola.position.set(0, p.y, p.z);
+        gondola.rotation.x = -Math.atan2(p.z, p.y);
+        ferrisWheelRotating.add(gondola);
+    }
+    const fRim = new THREE.Mesh(new THREE.TorusGeometry(1, 0.18, 8, 32), mat(0xFF0000));
+    fRim.rotation.x = Math.PI / 2;
+    fRim.scale.set(1, fRadius, fRadius);
+    ferrisWheelRotating.add(fRim);
+    // Drive rims ~10 ft smaller than outer rim (aluminum, at ~5 ft inward)
+    const fDriveRadius = fRadius - 2.5;
+    const driveRim = new THREE.Mesh(new THREE.TorusGeometry(1, 0.08, 6, 24), mat(0xAAAAAA));
+    driveRim.rotation.x = Math.PI / 2;
+    driveRim.scale.set(1, fDriveRadius, fDriveRadius);
+    ferrisWheelRotating.add(driveRim);
+    const fHub = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 0.8, 12), mat(0xFF0000));
+    ferrisWheelRotating.add(fHub);
+    // A-frame towers with lateral arms (two towers along rotation axis)
+    const towerHeight = 23;
+    const towerBase = 6;
+    [-1, 1].forEach((side) => {
+        const tower = new THREE.Group();
+        tower.position.set(side * 7, 0, 0);
+        const legL = new THREE.Mesh(new THREE.BoxGeometry(0.6, towerHeight, 0.6), mat(0xCC0000));
+        legL.position.set(-towerBase / 2, towerHeight / 2, 0);
+        legL.rotation.z = 0.08;
+        tower.add(legL);
+        const legR = new THREE.Mesh(new THREE.BoxGeometry(0.6, towerHeight, 0.6), mat(0xCC0000));
+        legR.position.set(towerBase / 2, towerHeight / 2, 0);
+        legR.rotation.z = -0.08;
+        tower.add(legR);
+        const lateralArm = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.25, 10), mat(0xCC0000));
+        lateralArm.position.set(side * 5, towerHeight - 2, 0);
+        tower.add(lateralArm);
+        ferrisGroup.add(tower);
     });
-    const hill = new THREE.Mesh(hillGeometry, hillMaterial);
-    hill.position.set(x, GROUND_LAYERS.base + height / 2, z);
-    hill.rotation.x = 0;
-    group.add(hill);
+    ferrisGroup.add(ferrisWheelRotating);
+    group.add(ferrisGroup);
 
-    // A few rocks/boulders on the slope
-    const rockMat = createWireframeMaterial(0x4a4a4a);
-    const rockPositions = [
-        { x: x + 35, z: z - 40 },
-        { x: x - 50, z: z + 30 },
-        { x: x + 20, z: z + 55 }
-    ];
-    for (const p of rockPositions) {
-        const rock = new THREE.Mesh(
-            new THREE.DodecahedronGeometry(2.5, 0),
-            rockMat
-        );
-        rock.position.set(p.x, GROUND_LAYERS.base + 1, p.z);
-        rock.rotation.set(Math.random() * 0.2, Math.random() * Math.PI, Math.random() * 0.1);
-        group.add(rock);
+    // --- ZIPPER (Chance 1968: vertical oval boom, 12 wire-mesh cages, central tower) ---
+    const zipperGroup = new THREE.Group();
+    zipperGroup.name = "Zipper";
+    zipperGroup.position.set(cx + 55, 0, cz + 45);
+    const zStructMat = mat(0xEEEEEE);  // White/light grey framework (per reference)
+    const zLightMat = mat(0xFFDD00);   // Yellow/orange bulbs
+    const zBoomVert = 14, zBoomHoriz = 4, zTowerHeight = 16;
+    const zOval = (a) => ({ y: Math.cos(a) * zBoomVert, z: Math.sin(a) * zBoomHoriz });
+    const CAGE_COLORS = [0xFFFF00, 0xFF69B4, 0x9932CC, 0xFF4444, 0x00CED1, 0xFFA500, 0x00FF7F, 0xFF1493, 0x00BFFF, 0xFF6347, 0x9370DB, 0x32CD32];
+
+    // Central tower (lattice look, portable base)
+    const tower = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.8, zTowerHeight, 8), zStructMat);
+    tower.position.y = zTowerHeight / 2;
+    zipperGroup.add(tower);
+    const basePlate = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 0.4, 8), mat(0x888888));
+    basePlate.position.y = 0.2;
+    zipperGroup.add(basePlate);
+
+    // Rotating boom group (spins at 7.5 rpm around vertical axis)
+    const zipperBoomRotating = new THREE.Group();
+    zipperBoomRotating.position.set(0, zTowerHeight, 0);
+    // Oval track frame
+    const zBoomTrack = new THREE.Mesh(new THREE.TorusGeometry(1, 0.1, 8, 32), zStructMat);
+    zBoomTrack.rotation.y = Math.PI / 2;
+    zBoomTrack.scale.set(1.02, zBoomVert * 1.02, zBoomHoriz * 1.02);
+    zipperBoomRotating.add(zBoomTrack);
+
+    // Light bulbs along boom (chevron pattern)
+    for (let i = 0; i < 24; i++) {
+        const t = (i / 24) * Math.PI * 2;
+        const p = zOval(t);
+        const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 4), zLightMat);
+        bulb.position.set(0, p.y, p.z);
+        zipperBoomRotating.add(bulb);
     }
 
+    // Two large spoked cable-drive wheels at oval ends (in boom YZ plane)
+    const createSpokedWheel = (y, z) => {
+        const wheel = new THREE.Group();
+        const rim = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 0.08, 16, 1), zStructMat);
+        rim.rotation.z = Math.PI / 2;
+        wheel.add(rim);
+        for (let i = 0; i < 8; i++) {
+            const a = (i / 8) * Math.PI * 2;
+            const spoke = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.2, 6), zStructMat);
+            spoke.position.set(0, Math.cos(a) * 0.6, Math.sin(a) * 0.6);
+            spoke.rotation.x = -a;
+            wheel.add(spoke);
+            const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.1, 6, 4), zLightMat);
+            bulb.position.set(0, Math.cos(a) * 1.3, Math.sin(a) * 1.3);
+            wheel.add(bulb);
+        }
+        const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.12, 8, 1), zStructMat);
+        hub.rotation.z = Math.PI / 2;
+        wheel.add(hub);
+        wheel.position.set(0, y, z);
+        wheel.scale.set(1, 1, zBoomHoriz / zBoomVert);
+        return wheel;
+    };
+    zipperBoomRotating.add(createSpokedWheel(zBoomVert, 0));
+    zipperBoomRotating.add(createSpokedWheel(-zBoomVert, 0));
+
+    // "Zipper" sign (lit letters, per reference)
+    const signGroup = new THREE.Group();
+    signGroup.position.set(0, 0, zBoomHoriz + 1.2);
+    ['Z','I','P','P','E','R'].forEach((_, i) => {
+        const letter = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.5, 0.15), zLightMat);
+        letter.position.set((i - 2.5) * 0.45, 0, 0);
+        signGroup.add(letter);
+    });
+    zipperBoomRotating.add(signGroup);
+
+    // 12 wire-mesh cages (colorful, per reference)
+    const zCages = [];
+    const createCage = (cageColor) => {
+        const cageMat = mat(cageColor);
+        const cage = new THREE.Group();
+        const bar = (wx, wy, wz, m = cageMat) => new THREE.Mesh(new THREE.BoxGeometry(wx, wy, wz), m);
+        const floor = bar(0.9, 0.08, 0.6);
+        floor.position.y = -0.36;
+        cage.add(floor);
+        [[0.44, 0.3], [0.44, -0.3], [-0.44, 0.3], [-0.44, -0.3]].forEach(([x, z]) => {
+            const post = bar(0.06, 0.88, 0.06);
+            post.position.set(x, 0.08, z);
+            cage.add(post);
+        });
+        const top = bar(0.82, 0.05, 0.52);
+        top.position.y = 0.48;
+        cage.add(top);
+        const doorFrame = bar(0.06, 0.78, 0.06);
+        doorFrame.position.set(0.46, 0.08, 0);
+        cage.add(doorFrame);
+        return cage;
+    };
+    for (let i = 0; i < 12; i++) {
+        const cage = createCage(CAGE_COLORS[i % CAGE_COLORS.length]);
+        zipperBoomRotating.add(cage);
+        zCages.push({
+            mesh: cage, index: i,
+            tumbleX: 0.006 + Math.random() * 0.004,
+            tumbleZ: 0.005 + Math.random() * 0.004,
+            accX: Math.random() * 0.5,
+            accZ: Math.random() * 0.5
+        });
+    }
+
+    zipperGroup.add(zipperBoomRotating);
+    group.add(zipperGroup);
+
+    // Zipper state for animation (car phase = position along oval, per-description dual rotation)
+    let zCarPhase = 0;
+    const ZIPPER_BOOM_RPM = 7.5;
+    const ZIPPER_CAR_RPM = 4;
+    const RPM_TO_RAD = (2 * Math.PI) / 60;
+
+    // --- SWING RIDE (12 seats, centrifugal swing physics, crown hub, loading platform) ---
+    const swingGroup = new THREE.Group();
+    swingGroup.name = "SwingRide";
+    swingGroup.position.set(cx + 35, 0, cz - 35);
+    const sPole = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.8, 14, 8), mat(0x0088FF));
+    sPole.position.y = 7;
+    swingGroup.add(sPole);
+    const sSeatCount = 12;
+    const sArmRadius = 5.5;
+    const sChainLength = 2.8;
+    const sHubY = 14;
+    const swingSeats = [];
+    for (let i = 0; i < sSeatCount; i++) {
+        const a = (i / sSeatCount) * Math.PI * 2;
+        const armGroup = new THREE.Group();
+        armGroup.userData.baseAngle = a;
+        const chain = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, sChainLength, 6), mat(0x666666));
+        chain.rotation.x = Math.PI / 2;
+        chain.position.set(0, -sChainLength / 2, 0);
+        armGroup.add(chain);
+        const seat = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.12, 0.35), mat(0x00AA00));
+        seat.position.set(0, -sChainLength, 0);
+        armGroup.add(seat);
+        armGroup.position.set(Math.sin(a) * sArmRadius, sHubY, Math.cos(a) * sArmRadius);
+        armGroup.rotation.y = -a;
+        swingGroup.add(armGroup);
+        swingSeats.push(armGroup);
+    }
+    const sHub = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1, 0.6, 12), mat(0xFF6600));
+    sHub.position.y = sHubY;
+    swingGroup.add(sHub);
+    const SWING_ANGLE_MAX = Math.PI / 4;
+    const swingAnglePhase = swingSeats.map(() => Math.random() * Math.PI * 2);
+    const loadingPlatform = new THREE.Mesh(new THREE.CylinderGeometry(8, 8.5, 0.3, 16), mat(0x555555));
+    loadingPlatform.position.y = 0.15;
+    swingGroup.add(loadingPlatform);
+    const loadingSkirt = new THREE.Mesh(new THREE.CylinderGeometry(8.5, 8.5, 1.2, 16, 1, true), mat(0x444444));
+    loadingSkirt.position.y = 0.9;
+    swingGroup.add(loadingSkirt);
+    group.add(swingGroup);
+
+    // --- TEACUP RIDE (6 cups on turntable, dual rotation) ---
+    const teacupGroup = new THREE.Group();
+    teacupGroup.name = "TeacupRide";
+    teacupGroup.position.set(cx - 50, 0, cz + 35);
+    const tPlatformRadius = 5.5;
+    const tCupCount = 6;
+    const mainTurntable = new THREE.Mesh(new THREE.CylinderGeometry(tPlatformRadius, tPlatformRadius + 0.3, 0.2, 24), mat(0x6B4423));
+    mainTurntable.position.y = 0.1;
+    teacupGroup.add(mainTurntable);
+    const teacupCups = [];
+    for (let i = 0; i < tCupCount; i++) {
+        const a = (i / tCupCount) * Math.PI * 2;
+        const cupGroup = new THREE.Group();
+        cupGroup.userData.spinPhase = Math.random() * Math.PI * 2;
+        const cupRad = 3.5;
+        cupGroup.position.set(Math.sin(a) * cupRad, 0, Math.cos(a) * cupRad);
+        const smallTurntable = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.9, 0.15, 16), mat(0x8B4513));
+        smallTurntable.position.y = 0.08;
+        cupGroup.add(smallTurntable);
+        const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.5, 0.7, 12), mat(0xFF69B4));
+        cup.position.y = 0.5;
+        cupGroup.add(cup);
+        const cupHandle = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.4, 8), mat(0xFFD700));
+        cupHandle.position.set(0.4, 0.75, 0);
+        cupHandle.rotation.z = -Math.PI / 3;
+        cupGroup.add(cupHandle);
+        teacupGroup.add(cupGroup);
+        teacupCups.push(cupGroup);
+    }
+    group.add(teacupGroup);
+
+    // --- FOOD & GAME STALLS ---
+    const stalls = [
+        { x: cx - 52, z: cz - 55, contentId: 'CARNIVAL_COTTON_CANDY' },
+        { x: cx - 67, z: cz - 40, contentId: 'CARNIVAL_FRIED_DOUGH' },
+        { x: cx - 57, z: cz + 60, contentId: 'CARNIVAL_HOT_DOGS' },
+        { x: cx + 53, z: cz + 65, contentId: 'CARNIVAL_LEMONADE' },
+        { x: cx + 58, z: cz - 45, contentId: 'CARNIVAL_FUNNEL_CAKE' },
+        { x: cx - 39, z: cz - 60, contentId: 'CARNIVAL_RING_TOSS' },
+        { x: cx + 28, z: cz - 55, contentId: 'CARNIVAL_BALLOON_DARTS' },
+        { x: cx - 32, z: cz + 55, contentId: 'CARNIVAL_BOTTLE_KNOCKDOWN' }
+    ];
+    stalls.forEach(({ x, z, contentId }) => {
+        const stall = new THREE.Group();
+        const base = new THREE.Mesh(new THREE.BoxGeometry(4, 2, 2.5), mat(0x8B4513));
+        base.position.y = 1;
+        stall.add(base);
+        const awning = new THREE.Mesh(new THREE.BoxGeometry(4.5, 0.3, 2.8), mat(0xFF2222));
+        awning.position.y = 2.8;
+        awning.rotation.z = 0.1;
+        stall.add(awning);
+        stall.position.set(x, 0, z);
+        const c = getFlavorContent(contentId);
+        stall.userData.isInteractive = true;
+        stall.userData.name = c.name;
+        stall.userData.flavorText = c.flavorText;
+        group.add(stall);
+        interactiveItems.push(stall);
+    });
+
+    const FERRIS_SPEED = 0.008, SWING_SPEED = 0.012;
+    const TEACUP_PLATFORM_SPEED = 0.006;
+    const TEACUP_CUP_SPEED = 0.03;
+    const updateCarnival = () => {
+        ferrisWheelRotating.rotation.x += FERRIS_SPEED;
+        swingGroup.rotation.y += SWING_SPEED;
+        const swingAngle = SWING_ANGLE_MAX * 0.85;
+        swingSeats.forEach((arm, i) => {
+            arm.rotation.x = swingAngle + Math.sin(swingAnglePhase[i] + swingGroup.rotation.y) * 0.08;
+        });
+        teacupGroup.rotation.y += TEACUP_PLATFORM_SPEED;
+        teacupCups.forEach((cup) => {
+            cup.userData.spinPhase += TEACUP_CUP_SPEED;
+            cup.rotation.y = cup.userData.spinPhase;
+        });
+        // Zipper: boom 7.5 rpm around vertical, cars travel oval ~4 rpm, chaotic tumble
+        const dt = 1 / 60;
+        zipperBoomRotating.rotation.y += ZIPPER_BOOM_RPM * RPM_TO_RAD * dt;
+        zCarPhase += ZIPPER_CAR_RPM * RPM_TO_RAD * dt;
+        zCages.forEach((c) => {
+            const a = (c.index / 12) * Math.PI * 2 + zCarPhase;
+            const p = zOval(a);
+            c.mesh.position.set(0, p.y, p.z);
+            c.accX += c.tumbleX;
+            c.accZ += c.tumbleZ;
+            c.mesh.rotation.x = -Math.atan2(p.z, p.y) + c.accX;
+            c.mesh.rotation.z = c.accZ;
+        });
+    };
+
     scene.add(group);
-    return { group };
+    return { group, updateCarnival, interactiveItems };
 };
 
-/** Mansion compound in ZONE_NE - wealthy residential corner. */
+/** Mansion compound in ZONE_NW (left column, top) - wealthy residential corner. */
 export const createMansionCompound = (scene) => {
     const group = new THREE.Group();
     group.name = "MansionCompound";
 
-    const { x: zoneX, z: zoneZ } = ZONE_NE_MANSION;
+    const { x: zoneX, z: zoneZ } = ZONE_NW_MANSION;
     const mat = (c, o = 1) => createWireframeMaterial(c, o);
     const interactiveItems = [];
 
-    // Main mansion (~22 wide, 14 tall, 16 deep) - faces west toward connector
+    // Main mansion (~22 wide, 14 tall, 16 deep) - faces east toward connector
     const mansion = createBuildingFacade(22, 14, 16, 'mansion', '', 0xFFFFFF);
     mansion.position.set(zoneX - 20, 0, zoneZ);
-    mansion.rotation.y = Math.PI / 2;
+    mansion.rotation.y = -Math.PI / 2;
     group.add(mansion);
 
-    // Gate and wall segments
+    // Gate and wall segments (gate closer to road at x=-170)
     const wallMat = mat(0x8B8680);
     const gateMat = mat(0x6B6560);
 
-    // Front gate (between driveway and mansion)
     const gateWidth = 8;
     const gateHeight = 3;
     const gatePost = new THREE.Mesh(new THREE.BoxGeometry(0.6, gateHeight + 2, 0.6), gateMat);
@@ -405,7 +826,6 @@ export const createMansionCompound = (scene) => {
     gateBar.position.set(zoneX + 35, gateHeight + 1, zoneZ);
     group.add(gateBar);
 
-    // Wall segments along driveway
     const wallHeight = 2;
     const wallDepth = 0.4;
     const addWallSeg = (wx, wz, w, rotY) => {
@@ -419,7 +839,6 @@ export const createMansionCompound = (scene) => {
     addWallSeg(zoneX + 35, zoneZ - 35, 35, Math.PI / 2);
     addWallSeg(zoneX + 35, zoneZ + 35, 35, Math.PI / 2);
 
-    // Driveway (gravel/darker plane)
     const drivewayMat = mat(0x4a4a48);
     const driveway = new THREE.Mesh(
         new THREE.PlaneGeometry(12, 45),
@@ -429,7 +848,6 @@ export const createMansionCompound = (scene) => {
     driveway.position.set(zoneX + 35, GROUND_LAYERS.base + 0.02, zoneZ);
     group.add(driveway);
 
-    // Small outbuilding (garage) - simple box
     const garage = new THREE.Mesh(
         new THREE.BoxGeometry(12, 5, 8),
         mat(0xA09888)
@@ -447,6 +865,262 @@ export const createMansionCompound = (scene) => {
 
     scene.add(group);
     return { group, interactiveItems };
+};
+
+/** River running through the right column (ZONE_NE, ZONE_E, ZONE_SE). Flow lines move right-to-left (+z toward -z). */
+export const createRiver = (scene) => {
+    const group = new THREE.Group();
+    group.name = "River";
+
+    const { x, halfWidth, zMin, zMax } = RIVER_CONFIG;
+    const length = zMax - zMin;
+    const width = halfWidth * 2;
+
+    const riverGeometry = new THREE.PlaneGeometry(width, length);
+    const riverMaterial = new THREE.MeshBasicMaterial({
+        color: 0x3a7090,
+        transparent: true,
+        opacity: 0.85,
+        side: THREE.DoubleSide
+    });
+    const river = new THREE.Mesh(riverGeometry, riverMaterial);
+    river.rotation.x = -Math.PI / 2;
+    river.position.set(x, GROUND_LAYERS.base + 0.01, (zMin + zMax) / 2);
+    group.add(river);
+
+    // Flow lines - white segments that move right-to-left (like cars on vertical road)
+    const flowGroup = new THREE.Group();
+    flowGroup.name = "RiverFlowLines";
+    const flowLineMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 });
+    const FLOW_LINE_LENGTH = 8;
+    const FLOW_LINE_WIDTH = 0.4;
+    const FLOW_SPEED = 0.08;
+    const flowLines = [];
+    const numLines = 12;
+    for (let i = 0; i < numLines; i++) {
+        const seg = new THREE.Mesh(
+            new THREE.PlaneGeometry(FLOW_LINE_WIDTH, FLOW_LINE_LENGTH),
+            flowLineMaterial.clone()
+        );
+        seg.rotation.x = -Math.PI / 2;
+        seg.position.set(x + (Math.random() - 0.5) * (width - 4), GROUND_LAYERS.base + 0.02, zMin + (i / numLines) * length);
+        flowGroup.add(seg);
+        flowLines.push({ mesh: seg });
+    }
+    group.add(flowGroup);
+
+    const updateFlow = () => {
+        flowLines.forEach(({ mesh }) => {
+            mesh.position.z -= FLOW_SPEED;
+            if (mesh.position.z < zMin) mesh.position.z = zMax;
+        });
+    };
+
+    scene.add(group);
+    return { group, flowLines, updateFlow };
+};
+
+/** MBTA-style subway entrance - canopy, T sign (Green Line colors), stairs. Use at world (x, z). */
+export const createSubwayStop = (x, z) => {
+    const subwayGroup = new THREE.Group();
+    subwayGroup.name = "SubwayStop";
+
+    // Platform/base
+    const platformGeometry = new THREE.BoxGeometry(5, 0.3, 3, 4, 1, 2);
+    const platformMaterial = createWireframeMaterial(0x666666);
+    const platform = new THREE.Mesh(platformGeometry, platformMaterial);
+    platform.position.y = 0.15;
+    subwayGroup.add(platform);
+
+    // Canopy roof (Green Line green)
+    const roofGeometry = new THREE.BoxGeometry(4.5, 0.15, 2.5, 4, 1, 2);
+    const roofMaterial = createWireframeMaterial(0x00843d, 0.95);  // MBTA Green Line
+    const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+    roof.position.y = 3.2;
+    subwayGroup.add(roof);
+
+    // Support pillars
+    const pillarGeometry = new THREE.BoxGeometry(0.2, 3.2, 0.2, 2, 6, 2);
+    const pillarMaterial = createWireframeMaterial(0x555555);
+    for (const [px, pz] of [[-1.8, 0.8], [1.8, 0.8], [-1.8, -0.8], [1.8, -0.8]]) {
+        const pillar = new THREE.Mesh(pillarGeometry, pillarMaterial);
+        pillar.position.set(px, 1.6, pz);
+        subwayGroup.add(pillar);
+    }
+
+    // T sign pole
+    const signPoleGeometry = new THREE.BoxGeometry(0.15, 2.5, 0.15, 2, 5, 2);
+    const signPoleMaterial = createWireframeMaterial(0x333333);
+    const signPole = new THREE.Mesh(signPoleGeometry, signPoleMaterial);
+    signPole.position.set(2.2, 1.25, 0);
+    subwayGroup.add(signPole);
+
+    // T logo circle (Green Line)
+    const tLogoGeometry = new THREE.CircleGeometry(0.5, 12);
+    const tLogoMaterial = createWireframeMaterial(0x00843d, 0.9);
+    const tLogo = new THREE.Mesh(tLogoGeometry, tLogoMaterial);
+    tLogo.position.set(2.2, 2.5, 0.08);
+    subwayGroup.add(tLogo);
+
+    // Station name sign - "Allston"
+    const signGeometry = new THREE.BoxGeometry(1.2, 0.5, 0.08, 2, 2, 1);
+    const signMaterial = createWireframeMaterial(0x000000, 0.9);
+    const sign = new THREE.Mesh(signGeometry, signMaterial);
+    sign.position.set(2.2, 3.2, 0.08);
+    subwayGroup.add(sign);
+
+    // Stairs going down
+    const stepGeometry = new THREE.BoxGeometry(2.5, 0.25, 1.2, 2, 1, 2);
+    const stepMaterial = createWireframeMaterial(0x888888);
+    for (let i = 0; i < 4; i++) {
+        const step = new THREE.Mesh(stepGeometry, stepMaterial);
+        step.position.set(-0.5, 0.125 + i * 0.25, -1.2 - i * 0.4);
+        subwayGroup.add(step);
+    }
+
+    subwayGroup.position.set(x, 0, z);
+    return subwayGroup;
+};
+
+/** City zone content - triple-decker apartments (CITY_NW) lining the roads */
+export const createTripleDeckers = (scene) => {
+    const group = new THREE.Group();
+    group.name = "TripleDeckers";
+    const setback = 18;  // Distance from road center to building
+    // Along left connector x=-255 (west side, facing road)
+    const road255West = [
+        { x: -255 - setback, z: 380 },
+        { x: -255 - setback, z: 320 },
+        { x: -255 - setback, z: 260 },
+        { x: -255 - setback, z: 200 },
+        { x: -255 - setback, z: 140 }
+    ];
+    // Along connector x=-85 (west side, in CITY_NW)
+    const road85West = [
+        { x: -85 - setback, z: 350 },
+        { x: -85 - setback, z: 280 },
+        { x: -85 - setback, z: 210 }
+    ];
+    [...road255West, ...road85West].forEach(({ x, z }) => {
+        const building = createTripleDeckerBuilding();  // Random from 5 models
+        building.position.set(x, 0, z);
+        building.rotation.y = Math.PI / 2;  // Face the road (east)
+        group.add(building);
+    });
+    scene.add(group);
+    return { group };
+};
+
+/** City zone content - record stores, vintage (CITY_NE) */
+export const createRecordStrip = (scene) => {
+    const group = new THREE.Group();
+    group.name = "RecordStrip";
+    const zoneX = 333;
+    const zoneZ = 333;
+    const stores = [
+        { x: zoneX - 80, z: zoneZ - 40 },
+        { x: zoneX - 40, z: zoneZ + 30 },
+        { x: zoneX, z: zoneZ - 70 },
+        { x: zoneX + 50, z: zoneZ + 50 }
+    ];
+    stores.forEach(({ x, z }, i) => {
+        const b = createBuildingFacade(8, 5, 6, 'storefront_urban', '', 0xFFFFFF);
+        b.position.set(x, 0, z);
+        b.rotation.y = i * 0.2;
+        group.add(b);
+    });
+    scene.add(group);
+    return { group };
+};
+
+/** City zone content - residential block (CITY_W) - triple deckers along roads */
+export const createResidentialBlock = (scene) => {
+    const group = new THREE.Group();
+    group.name = "ResidentialBlock";
+    const setback = 18;
+    // Along connector x=-255 (west side)
+    const road255 = [
+        { x: -255 - setback, z: 100 },
+        { x: -255 - setback, z: 50 },
+        { x: -255 - setback, z: 0 },
+        { x: -255 - setback, z: -50 },
+        { x: -255 - setback, z: -100 }
+    ];
+    // Along connector x=-85 (both sides - west and east)
+    const road85West = [
+        { x: -85 - setback, z: 80 },
+        { x: -85 - setback, z: 0 },
+        { x: -85 - setback, z: -80 }
+    ];
+    const road85East = [
+        { x: -85 + setback, z: 60 },
+        { x: -85 + setback, z: -60 }
+    ];
+    [...road255, ...road85West, ...road85East].forEach(({ x, z }) => {
+        const b = createTripleDeckerBuilding();  // Random from 5 models
+        b.position.set(x, 0, z);
+        b.rotation.y = (x < -85) ? Math.PI / 2 : -Math.PI / 2;  // Face the road
+        group.add(b);
+    });
+    scene.add(group);
+    return { group };
+};
+
+/** City zone content - international food row (CITY_E) */
+export const createFoodRow = (scene) => {
+    const group = new THREE.Group();
+    group.name = "FoodRow";
+    const zoneX = 333;
+    const zoneZ = 0;
+    const positions = [
+        { x: zoneX - 100, z: zoneZ - 50 },
+        { x: zoneX - 60, z: zoneZ + 40 },
+        { x: zoneX - 20, z: zoneZ - 80 },
+        { x: zoneX + 30, z: zoneZ + 60 },
+        { x: zoneX + 70, z: zoneZ - 30 }
+    ];
+    positions.forEach(({ x, z }) => {
+        const b = createBuildingFacade(7, 4, 5, 'storefront_urban', '', 0xFF6600);
+        b.position.set(x, 0, z);
+        b.rotation.y = 0.5;
+        group.add(b);
+    });
+    scene.add(group);
+    return { group };
+};
+
+/** City zone content - urban park (CITY_SW) */
+export const createUrbanPark = (scene) => {
+    const group = new THREE.Group();
+    group.name = "UrbanPark";
+    const zoneX = -333;
+    const zoneZ = -333;
+    const mat = (c, o = 1) => createWireframeMaterial(c, o);
+    // Benches
+    const benchPositions = [
+        { x: zoneX - 80, z: zoneZ - 60 },
+        { x: zoneX - 40, z: zoneZ + 40 },
+        { x: zoneX + 20, z: zoneZ - 30 },
+        { x: zoneX + 60, z: zoneZ + 70 }
+    ];
+    benchPositions.forEach(({ x, z }) => {
+        const bench = new THREE.Mesh(new THREE.BoxGeometry(2, 0.4, 0.8), mat(0x8B4513));
+        bench.position.set(x, 0.2, z);
+        bench.rotation.y = (Math.random() - 0.5) * 0.5;
+        group.add(bench);
+    });
+    // Sparse trees
+    const treePositions = [
+        { x: zoneX - 60, z: zoneZ - 40 },
+        { x: zoneX, z: zoneZ + 50 },
+        { x: zoneX + 50, z: zoneZ - 60 }
+    ];
+    treePositions.forEach(({ x, z }) => {
+        const tree = createTree(x, z, 0.5 + Math.random() * 0.3, 'Red Maple');
+        group.add(tree);
+    });
+    scene.add(group);
+    return { group };
 };
 
 // Perpendicular roads connecting the 3 rows of zones - full corridor (sidewalk | road | sidewalk) matching zone streets
@@ -514,37 +1188,91 @@ export const createConnectorRoads = (scene) => {
         const whiteMaterial = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
         const lineWidth = 0.1;
 
-        const topYellow = new THREE.Mesh(
-            new THREE.PlaneGeometry(lineWidth, CONNECTOR_ROAD_LENGTH),
-            yellowMaterial.clone()
-        );
-        topYellow.rotation.x = -Math.PI / 2;
-        topYellow.position.set(roadCenterX + 0.1, GROUND_LAYERS.markings, 0);
-        connectorGroup.add(topYellow);
+        const zoneStreetZLevels = [11, 344, -322];
+        const sortedZ = [...zoneStreetZLevels].sort((a, b) => a - b);
+        const whiteGapHalf = 5;  // Match horizontal road lane divider offset (leftLine/rightLine at z=±5)
+        const zMin = -halfLen;
+        const zMax = halfLen;
 
-        const bottomYellow = new THREE.Mesh(
-            new THREE.PlaneGeometry(lineWidth, CONNECTOR_ROAD_LENGTH),
-            yellowMaterial.clone()
-        );
-        bottomYellow.rotation.x = -Math.PI / 2;
-        bottomYellow.position.set(roadCenterX - 0.1, GROUND_LAYERS.markings, 0);
-        connectorGroup.add(bottomYellow);
+        const buildSegments = (zRanges) => {
+            const segs = [];
+            for (const [zStart, zEnd] of zRanges) {
+                const len = zEnd - zStart;
+                if (len <= 0) continue;
+                const mesh = new THREE.Mesh(
+                    new THREE.PlaneGeometry(lineWidth, len),
+                    whiteMaterial.clone()
+                );
+                mesh.rotation.x = -Math.PI / 2;
+                mesh.position.set(0, GROUND_LAYERS.markings, (zStart + zEnd) / 2);
+                segs.push({ mesh, zStart, zEnd });
+            }
+            return segs;
+        };
 
-        const leftWhite = new THREE.Mesh(
-            new THREE.PlaneGeometry(lineWidth, CONNECTOR_ROAD_LENGTH),
-            whiteMaterial.clone()
-        );
-        leftWhite.rotation.x = -Math.PI / 2;
-        leftWhite.position.set(roadCenterX + 5, GROUND_LAYERS.markings, 0);
-        connectorGroup.add(leftWhite);
+        // Double yellow center lines - gapped at zone street crossings (no yellow in intersection)
+        const yellowGapHalf = 5;
+        const yellowZRanges = [];
+        let yPrevZ = zMin;
+        for (const zoneZ of sortedZ) {
+            const gapStart = zoneZ - yellowGapHalf;
+            const gapEnd = zoneZ + yellowGapHalf;
+            if (yPrevZ < gapStart) yellowZRanges.push([yPrevZ, gapStart]);
+            yPrevZ = Math.max(yPrevZ, gapEnd);
+        }
+        if (yPrevZ < zMax) yellowZRanges.push([yPrevZ, zMax]);
+        yellowZRanges.forEach(([zStart, zEnd]) => {
+            const len = zEnd - zStart;
+            if (len <= 0) return;
+            [roadCenterX + 0.1, roadCenterX - 0.1].forEach((px) => {
+                const mesh = new THREE.Mesh(
+                    new THREE.PlaneGeometry(lineWidth, len),
+                    yellowMaterial.clone()
+                );
+                mesh.rotation.x = -Math.PI / 2;
+                mesh.position.set(px, GROUND_LAYERS.markings, (zStart + zEnd) / 2);
+                connectorGroup.add(mesh);
+            });
+        });
 
-        const rightWhite = new THREE.Mesh(
-            new THREE.PlaneGeometry(lineWidth, CONNECTOR_ROAD_LENGTH),
-            whiteMaterial.clone()
-        );
-        rightWhite.rotation.x = -Math.PI / 2;
-        rightWhite.position.set(roadCenterX - 5, GROUND_LAYERS.markings, 0);
-        connectorGroup.add(rightWhite);
+        // White lane lines - inner and outer gapped at zoneZ ± 5 (no white in intersection)
+        const innerRanges = [];
+        let wPrevZ = zMin;
+        for (const zoneZ of sortedZ) {
+            const gapStart = zoneZ - whiteGapHalf;
+            const gapEnd = zoneZ + whiteGapHalf;
+            if (wPrevZ < gapStart) innerRanges.push([wPrevZ, gapStart]);
+            wPrevZ = Math.max(wPrevZ, gapEnd);
+        }
+        if (wPrevZ < zMax) innerRanges.push([wPrevZ, zMax]);
+
+        // Inner line (toward center): segmented with gaps. Left connector: +5 is inner; Right: -5 is inner.
+        const isLeftConnector = roadCenterX < 0;
+        const innerX = isLeftConnector ? roadCenterX + 5 : roadCenterX - 5;
+        const outerX = isLeftConnector ? roadCenterX - 5 : roadCenterX + 5;
+
+        const innerSegments = buildSegments(innerRanges);
+        innerSegments.forEach(({ mesh, zStart, zEnd }) => {
+            mesh.position.x = innerX;
+            connectorGroup.add(mesh);
+        });
+
+        // Outer line: left connector gapped; right connector (river side) full length so white continues across
+        if (isLeftConnector) {
+            const outerSegments = buildSegments(innerRanges);
+            outerSegments.forEach(({ mesh }) => {
+                mesh.position.x = outerX;
+                connectorGroup.add(mesh);
+            });
+        } else {
+            const outerWhite = new THREE.Mesh(
+                new THREE.PlaneGeometry(lineWidth, CONNECTOR_ROAD_LENGTH),
+                whiteMaterial.clone()
+            );
+            outerWhite.rotation.x = -Math.PI / 2;
+            outerWhite.position.set(outerX, GROUND_LAYERS.markings, 0);
+            connectorGroup.add(outerWhite);
+        }
 
         return { roadCenterX, leftSidewalkX, rightSidewalkX };
     };
@@ -646,6 +1374,134 @@ export const createConnectorRoads = (scene) => {
     return connectorGroup;
 };
 
+/** City map: 2x road density - 4 vertical connectors + 2 horizontal cross-streets */
+export const createCityConnectorRoads = (scene) => {
+    const roadMaterial = new THREE.MeshBasicMaterial({ color: 0x3a3a3a });
+    const sidewalkMaterial = new THREE.MeshBasicMaterial({ color: 0x555555 });
+    const connectorGroup = new THREE.Group();
+    connectorGroup.name = "CityConnectorRoads";
+
+    const halfLen = CONNECTOR_ROAD_LENGTH / 2;
+    const mapHalfWidth = 500;
+
+    // Add vertical corridor at given x
+    const addVerticalCorridor = (roadCenterX) => {
+        const offset = CONNECTOR_ROAD_WIDTH / 2 + CONNECTOR_SIDEWALK_DEPTH / 2;
+        const leftX = roadCenterX - offset;
+        const rightX = roadCenterX + offset;
+
+        [leftX, rightX].forEach((sx) => {
+            const sw = new THREE.Mesh(
+                new THREE.PlaneGeometry(CONNECTOR_SIDEWALK_DEPTH, CONNECTOR_ROAD_LENGTH),
+                sidewalkMaterial.clone()
+            );
+            sw.rotation.x = -Math.PI / 2;
+            sw.position.set(sx, GROUND_LAYERS.concrete, 0);
+            connectorGroup.add(sw);
+        });
+
+        const road = new THREE.Mesh(
+            new THREE.PlaneGeometry(CONNECTOR_ROAD_WIDTH, CONNECTOR_ROAD_LENGTH),
+            roadMaterial.clone()
+        );
+        road.rotation.x = -Math.PI / 2;
+        road.position.set(roadCenterX, GROUND_LAYERS.asphalt, 0);
+        connectorGroup.add(road);
+
+        // Center lines
+        const yellowMat = new THREE.MeshBasicMaterial({ color: 0xFFFF00 });
+        [-0.1, 0.1].forEach((dx) => {
+            const line = new THREE.Mesh(
+                new THREE.PlaneGeometry(0.1, CONNECTOR_ROAD_LENGTH),
+                yellowMat.clone()
+            );
+            line.rotation.x = -Math.PI / 2;
+            line.position.set(roadCenterX + dx, GROUND_LAYERS.markings, 0);
+            connectorGroup.add(line);
+        });
+    };
+
+    // Add horizontal corridor at given z. Zone street levels (11, 344, -322) get road only;
+    // zones own sidewalks there. Cross-streets (166, -166) get full corridor.
+    const addHorizontalCorridor = (roadCenterZ, roadsOnly = false) => {
+        if (!roadsOnly) {
+            const offset = CONNECTOR_ROAD_WIDTH / 2 + CONNECTOR_SIDEWALK_DEPTH / 2;
+            const northZ = roadCenterZ + offset;
+            const southZ = roadCenterZ - offset;
+
+            [northZ, southZ].forEach((sz) => {
+                const sw = new THREE.Mesh(
+                    new THREE.PlaneGeometry(mapHalfWidth * 2, CONNECTOR_SIDEWALK_DEPTH),
+                    sidewalkMaterial.clone()
+                );
+                sw.rotation.x = -Math.PI / 2;
+                sw.position.set(0, GROUND_LAYERS.concrete, sz);
+                connectorGroup.add(sw);
+            });
+        }
+
+        const road = new THREE.Mesh(
+            new THREE.PlaneGeometry(mapHalfWidth * 2, CONNECTOR_ROAD_WIDTH),
+            roadMaterial.clone()
+        );
+        road.rotation.x = -Math.PI / 2;
+        road.position.set(0, GROUND_LAYERS.asphalt, roadCenterZ);
+        connectorGroup.add(road);
+
+        const yellowMat = new THREE.MeshBasicMaterial({ color: 0xFFFF00 });
+        [-0.1, 0.1].forEach((dz) => {
+            const line = new THREE.Mesh(
+                new THREE.PlaneGeometry(mapHalfWidth * 2, 0.1),
+                yellowMat.clone()
+            );
+            line.rotation.x = -Math.PI / 2;
+            line.position.set(0, GROUND_LAYERS.markings, roadCenterZ + dz);
+            connectorGroup.add(line);
+        });
+    };
+
+    const ZONE_STREET_Z = [11, 344, -322];
+    const CROSS_STREET_Z = [166, -166];
+
+    CITY_CONNECTOR_X.forEach(addVerticalCorridor);
+    ZONE_STREET_Z.forEach((z) => addHorizontalCorridor(z, true));
+    CROSS_STREET_Z.forEach((z) => addHorizontalCorridor(z, false));
+
+    // Junctions at intersections
+    const junctionMat = roadMaterial.clone();
+    const cornerMat = sidewalkMaterial.clone();
+    const cornerSize = 6;
+    const cornerOffset = 9;
+    const allVerticalX = CITY_CONNECTOR_X;
+    const allHorizontalZ = [11, 166, 344, -166, -322];  // zone streets + cross streets
+
+    allVerticalX.forEach((connX) => {
+        allHorizontalZ.forEach((zoneZ) => {
+            const asphalt = new THREE.Mesh(
+                new THREE.PlaneGeometry(CONNECTOR_ROAD_WIDTH, STREET_DEPTH),
+                junctionMat.clone()
+            );
+            asphalt.rotation.x = -Math.PI / 2;
+            asphalt.position.set(connX, GROUND_LAYERS.asphalt, zoneZ);
+            connectorGroup.add(asphalt);
+
+            [[connX - cornerOffset, zoneZ - cornerOffset], [connX + cornerOffset, zoneZ - cornerOffset],
+             [connX - cornerOffset, zoneZ + cornerOffset], [connX + cornerOffset, zoneZ + cornerOffset]].forEach(([x, z]) => {
+                const corner = new THREE.Mesh(
+                    new THREE.PlaneGeometry(cornerSize, cornerSize),
+                    cornerMat.clone()
+                );
+                corner.rotation.x = -Math.PI / 2;
+                corner.position.set(x, GROUND_LAYERS.concrete, z);
+                connectorGroup.add(corner);
+            });
+        });
+    });
+
+    scene.add(connectorGroup);
+    return connectorGroup;
+};
+
 // Connector road vehicles - drive along Z on x = ±170
 export const createConnectorVehicles = (scene, createCarFn, getRandomCarColor) => {
     const connectorVehiclesGroup = new THREE.Group();
@@ -672,8 +1528,270 @@ export const createConnectorVehicles = (scene, createCarFn, getRandomCarColor) =
     return connectorVehiclesGroup;
 };
 
-const SPAWN_RADIUS = 135;
-const DESPAWN_RADIUS = 165;
+/** City connector vehicles - 4 vertical roads */
+export const createCityConnectorVehicles = (scene, createCarFn, getRandomCarColor) => {
+    const connectorVehiclesGroup = new THREE.Group();
+    connectorVehiclesGroup.name = "CityConnectorVehicles";
+
+    const roads = [];
+    CITY_CONNECTOR_X.forEach((x) => {
+        roads.push({ x, direction: 'left' });
+        roads.push({ x, direction: 'right' });
+    });
+
+    roads.forEach((road, i) => {
+        const car = createCarFn(road.x, getRandomCarColor(), road.direction, { vertical: true });
+        car.position.set(road.x, 0, -350 + (i % 8) * 90);
+        car.userData.roadType = 'vertical';
+        car.userData.bounds = { ...VERTICAL_BOUNDS };
+        car.userData.connectorX = road.x;
+        connectorVehiclesGroup.add(car);
+    });
+
+    scene.add(connectorVehiclesGroup);
+    return connectorVehiclesGroup;
+};
+
+/** City map: triple deckers spawn like trees - distance-based, avoid roads, less dense than trees */
+const TD_CORE_RADIUS = 100;
+const TD_FORWARD_RADIUS = 200;
+const TD_LATERAL_SPAN = 140;
+const TD_REAR_RADIUS = 80;
+const TD_CORE_KEEP = 140;
+const TD_FORWARD_KEEP = 240;
+const TD_LATERAL_KEEP = 160;
+const TD_REAR_KEEP = 110;
+const TD_SPAWN_BATCH = 8;
+const TD_STEP = 18;
+const TD_PROB = 0.38;
+const CITY_CORRIDOR_HALF = CONNECTOR_ROAD_WIDTH / 2 + CONNECTOR_SIDEWALK_DEPTH;
+
+const disposeTripleDecker = (mesh) => {
+    mesh.traverse((child) => {
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) {
+            if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
+            else child.material.dispose();
+        }
+    });
+};
+
+export const createCityTripleDeckers = (scene) => {
+    const group = new THREE.Group();
+    group.name = "CityTripleDeckers";
+
+    const MAP_X_MIN = -500;
+    const MAP_X_MAX = 500;
+    const MAP_Z_MIN = -500;
+    const MAP_Z_MAX = 500;
+
+    const rect = (left, right, front, back) => ({ left, right, front, back });
+    const inRect = (x, z, r) => x >= r.left && x <= r.right && z >= r.front && z <= r.back;
+
+    const exclusions = [];
+    CITY_CONNECTOR_X.forEach((connX) => {
+        exclusions.push(rect(connX - CITY_CORRIDOR_HALF, connX + CITY_CORRIDOR_HALF, MAP_Z_MIN, MAP_Z_MAX));
+    });
+    const allHorizontalZ = [11, 166, 344, -166, -322];
+    allHorizontalZ.forEach((connZ) => {
+        exclusions.push(rect(MAP_X_MIN, MAP_X_MAX, connZ - CITY_CORRIDOR_HALF, connZ + CITY_CORRIDOR_HALF));
+    });
+
+    const isExcluded = (wx, wz) => exclusions.some((r) => inRect(wx, wz, r));
+
+    const registry = [];
+    for (let wx = MAP_X_MIN; wx <= MAP_X_MAX; wx += TD_STEP) {
+        for (let wz = MAP_Z_MIN; wz <= MAP_Z_MAX; wz += TD_STEP) {
+            if (isExcluded(wx, wz)) continue;
+            if (Math.random() > TD_PROB) continue;
+            const x = wx + (Math.random() - 0.5) * 4;
+            const z = wz + (Math.random() - 0.5) * 4;
+            if (isExcluded(x, z)) continue;
+
+            const rotation = (Math.floor(Math.random() * 4) * Math.PI) / 2;
+            registry.push({ x, z, rotation, mesh: null });
+        }
+    }
+
+    const cameraDir = new THREE.Vector3();
+    const inSpawnRegion = (dx, dz, d, dot, lateral, useKeep) => {
+        const core = useKeep ? TD_CORE_KEEP : TD_CORE_RADIUS;
+        const fwd = useKeep ? TD_FORWARD_KEEP : TD_FORWARD_RADIUS;
+        const lat = useKeep ? TD_LATERAL_KEEP : TD_LATERAL_SPAN;
+        const rear = useKeep ? TD_REAR_KEEP : TD_REAR_RADIUS;
+        return d < core || (dot > 0 && dot < fwd && lateral < lat) || (dot < 0 && d < rear);
+    };
+
+    const update = (camera) => {
+        const cx = camera.position.x;
+        const cz = camera.position.z;
+        camera.getWorldDirection(cameraDir);
+        const lenXZ = Math.sqrt(cameraDir.x * cameraDir.x + cameraDir.z * cameraDir.z) || 1e-6;
+        const dirX = cameraDir.x / lenXZ;
+        const dirZ = cameraDir.z / lenXZ;
+
+        const toSpawn = [];
+        for (const entry of registry) {
+            const dx = entry.x - cx;
+            const dz = entry.z - cz;
+            const d = Math.sqrt(dx * dx + dz * dz);
+            const dot = dx * dirX + dz * dirZ;
+            const lateral = Math.sqrt(Math.max(0, d * d - dot * dot));
+
+            const shouldSpawn = inSpawnRegion(dx, dz, d, dot, lateral, false);
+            const shouldKeep = inSpawnRegion(dx, dz, d, dot, lateral, true);
+
+            if (entry.mesh) {
+                if (!shouldKeep) {
+                    group.remove(entry.mesh);
+                    disposeTripleDecker(entry.mesh);
+                    entry.mesh = null;
+                }
+            } else if (shouldSpawn) {
+                toSpawn.push({ entry, d });
+            }
+        }
+
+        toSpawn.sort((a, b) => a.d - b.d);
+        for (let i = 0; i < Math.min(TD_SPAWN_BATCH, toSpawn.length); i++) {
+            const { entry } = toSpawn[i];
+            const b = createTripleDeckerBuilding();
+            b.position.set(entry.x, 0, entry.z);
+            b.rotation.y = entry.rotation;
+            entry.mesh = b;
+            group.add(b);
+        }
+    };
+
+    console.log(`🏠 City triple deckers: ${registry.length} positions (step=${TD_STEP}, prob=${TD_PROB}, batch=${TD_SPAWN_BATCH})`);
+    scene.add(group);
+    return { group, update };
+};
+
+/** City map: edge skyscrapers - tall towers in peripheral band, distance-based spawn */
+const SKY_EDGE_BAND = 380;
+const SKY_STEP = 28;
+const SKY_PROB = 0.22;
+const SKY_SPAWN_BATCH = 4;
+const SKY_COLORS = [0x4a5568, 0x3d4f5f, 0x5a6a7a, 0x3a4a5a];
+
+const disposeTower = (mesh) => {
+    mesh.traverse((child) => {
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) {
+            if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
+            else child.material.dispose();
+        }
+    });
+};
+
+export const createCitySkyline = (scene) => {
+    const group = new THREE.Group();
+    group.name = "CitySkyline";
+
+    const MAP_X_MIN = -500;
+    const MAP_X_MAX = 500;
+    const MAP_Z_MIN = -500;
+    const MAP_Z_MAX = 500;
+
+    const rect = (left, right, front, back) => ({ left, right, front, back });
+    const inRect = (x, z, r) => x >= r.left && x <= r.right && z >= r.front && z <= r.back;
+
+    const exclusions = [];
+    CITY_CONNECTOR_X.forEach((connX) => {
+        exclusions.push(rect(connX - CITY_CORRIDOR_HALF, connX + CITY_CORRIDOR_HALF, MAP_Z_MIN, MAP_Z_MAX));
+    });
+    const allHorizontalZ = [11, 166, 344, -166, -322];
+    allHorizontalZ.forEach((connZ) => {
+        exclusions.push(rect(MAP_X_MIN, MAP_X_MAX, connZ - CITY_CORRIDOR_HALF, connZ + CITY_CORRIDOR_HALF));
+    });
+
+    const isExcluded = (wx, wz) => exclusions.some((r) => inRect(wx, wz, r));
+    const inEdgeBand = (x, z) => Math.abs(x) > SKY_EDGE_BAND || Math.abs(z) > SKY_EDGE_BAND;
+
+    const registry = [];
+    for (let wx = MAP_X_MIN; wx <= MAP_X_MAX; wx += SKY_STEP) {
+        for (let wz = MAP_Z_MIN; wz <= MAP_Z_MAX; wz += SKY_STEP) {
+            if (!inEdgeBand(wx, wz)) continue;
+            if (isExcluded(wx, wz)) continue;
+            if (Math.random() > SKY_PROB) continue;
+            const x = wx + (Math.random() - 0.5) * 6;
+            const z = wz + (Math.random() - 0.5) * 6;
+            if (isExcluded(x, z)) continue;
+
+            const width = 12 + Math.random() * 10;
+            const height = 15 + Math.random() * 25;
+            const depth = 10 + Math.random() * 8;
+            const color = SKY_COLORS[Math.floor(Math.random() * SKY_COLORS.length)];
+            registry.push({ x, z, width, height, depth, color, mesh: null });
+        }
+    }
+
+    const cameraDir = new THREE.Vector3();
+    const inSpawnRegion = (dx, dz, d, dot, lateral, useKeep) => {
+        const core = useKeep ? TD_CORE_KEEP : TD_CORE_RADIUS;
+        const fwd = useKeep ? TD_FORWARD_KEEP : TD_FORWARD_RADIUS;
+        const lat = useKeep ? TD_LATERAL_KEEP : TD_LATERAL_SPAN;
+        const rear = useKeep ? TD_REAR_KEEP : TD_REAR_RADIUS;
+        return d < core || (dot > 0 && dot < fwd && lateral < lat) || (dot < 0 && d < rear);
+    };
+
+    const update = (camera) => {
+        const cx = camera.position.x;
+        const cz = camera.position.z;
+        camera.getWorldDirection(cameraDir);
+        const lenXZ = Math.sqrt(cameraDir.x * cameraDir.x + cameraDir.z * cameraDir.z) || 1e-6;
+        const dirX = cameraDir.x / lenXZ;
+        const dirZ = cameraDir.z / lenXZ;
+
+        const toSpawn = [];
+        for (const entry of registry) {
+            const dx = entry.x - cx;
+            const dz = entry.z - cz;
+            const d = Math.sqrt(dx * dx + dz * dz);
+            const dot = dx * dirX + dz * dirZ;
+            const lateral = Math.sqrt(Math.max(0, d * d - dot * dot));
+
+            const shouldSpawn = inSpawnRegion(dx, dz, d, dot, lateral, false);
+            const shouldKeep = inSpawnRegion(dx, dz, d, dot, lateral, true);
+
+            if (entry.mesh) {
+                if (!shouldKeep) {
+                    group.remove(entry.mesh);
+                    disposeTower(entry.mesh);
+                    entry.mesh = null;
+                }
+            } else if (shouldSpawn) {
+                toSpawn.push({ entry, d });
+            }
+        }
+
+        toSpawn.sort((a, b) => a.d - b.d);
+        for (let i = 0; i < Math.min(SKY_SPAWN_BATCH, toSpawn.length); i++) {
+            const { entry } = toSpawn[i];
+            const tower = createSimpleTower(entry.width, entry.height, entry.depth, entry.color);
+            tower.position.set(entry.x, 0, entry.z);
+            tower.rotation.y = (Math.floor(Math.random() * 4) * Math.PI) / 2;
+            entry.mesh = tower;
+            group.add(tower);
+        }
+    };
+
+    console.log(`🏙️ City skyline: ${registry.length} positions (edge band |x| or |z| > ${SKY_EDGE_BAND}, batch=${SKY_SPAWN_BATCH})`);
+    scene.add(group);
+    return { group, update };
+};
+
+// Direction-aware tree spawn: immediate area + extended in look direction
+const CORE_RADIUS = 100;      // Always load - immediate area around player
+const FORWARD_RADIUS = 200;   // Load far in camera look direction
+const LATERAL_SPAN = 140;     // Width of forward cone (each side)
+const REAR_RADIUS = 80;       // Smaller radius behind player
+const CORE_KEEP = 140;        // Hysteresis - keep core trees until here
+const FORWARD_KEEP = 240;
+const LATERAL_KEEP = 160;
+const REAR_KEEP = 110;
+const SPAWN_BATCH = 25;       // Max trees to spawn per frame (avoid hitches)
 
 const disposeTree = (tree) => {
     tree.traverse((child) => {
@@ -715,19 +1833,19 @@ export const createUnifiedMapTrees = (scene) => {
     exclusions.push(rect(-182, -158, MAP_Z_MIN, MAP_Z_MAX));
     exclusions.push(rect(158, 182, MAP_Z_MIN, MAP_Z_MAX));
 
-    // Zone streets (horizontal strips)
+    // Zone streets (horizontal strips) - suburban streets stop before river
     const PLAZA_Z = UNIFIED_MAP_ZONE_OFFSETS.PLAZA.z;
     const FOREST_Z = UNIFIED_MAP_ZONE_OFFSETS.FOREST_SUBURBAN.z;
     const POND_Z = UNIFIED_MAP_ZONE_OFFSETS.POND.z;
     const stDep = STREET_DEPTH / 2;
-    exclusions.push(rect(ZONE_STREET_X_MIN, ZONE_STREET_X_MAX, PLAZA_Z + 11 - stDep, PLAZA_Z + 11 + stDep));
-    exclusions.push(rect(ZONE_STREET_X_MIN, ZONE_STREET_X_MAX, FOREST_Z + 11 - stDep, FOREST_Z + 11 + stDep));
-    exclusions.push(rect(ZONE_STREET_X_MIN, ZONE_STREET_X_MAX, POND_Z + 11 - stDep, POND_Z + 11 + stDep));
+    exclusions.push(rect(ZONE_STREET_X_MIN, SUBURBAN_ZONE_STREET_X_MAX, PLAZA_Z + 11 - stDep, PLAZA_Z + 11 + stDep));
+    exclusions.push(rect(ZONE_STREET_X_MIN, SUBURBAN_ZONE_STREET_X_MAX, FOREST_Z + 11 - stDep, FOREST_Z + 11 + stDep));
+    exclusions.push(rect(ZONE_STREET_X_MIN, SUBURBAN_ZONE_STREET_X_MAX, POND_Z + 11 - stDep, POND_Z + 11 + stDep));
 
     // PLAZA sidewalks, parking, buildings (world = local for plaza at 0,0)
-    exclusions.push(rect(ZONE_STREET_X_MIN, ZONE_STREET_X_MAX, -1, 5));   // near sidewalk
-    exclusions.push(rect(ZONE_STREET_X_MIN, ZONE_STREET_X_MAX, 17, 23));  // far sidewalk
-    exclusions.push(rect(ZONE_STREET_X_MIN, ZONE_STREET_X_MAX, 27, 87));  // parking (after buffer fix)
+    exclusions.push(rect(ZONE_STREET_X_MIN, SUBURBAN_ZONE_STREET_X_MAX, -1, 5));   // near sidewalk
+    exclusions.push(rect(ZONE_STREET_X_MIN, SUBURBAN_ZONE_STREET_X_MAX, 17, 23));  // far sidewalk
+    exclusions.push(rect(ZONE_STREET_X_MIN, SUBURBAN_ZONE_STREET_X_MAX, 27, 87));  // parking (after buffer fix)
     exclusions.push(rect(-70, 70, -10, 15));
     exclusions.push(rect(-70, 70, 20, 50));
     exclusions.push(rect(-50, 50, 50, 70));
@@ -737,8 +1855,8 @@ export const createUnifiedMapTrees = (scene) => {
 
     // FOREST zone sidewalks, buildings, park (world = local + FOREST_Z)
     const fz = FOREST_Z;
-    exclusions.push(rect(ZONE_STREET_X_MIN, ZONE_STREET_X_MAX, fz - 1, fz + 5));
-    exclusions.push(rect(ZONE_STREET_X_MIN, ZONE_STREET_X_MAX, fz + 17, fz + 23));
+    exclusions.push(rect(ZONE_STREET_X_MIN, SUBURBAN_ZONE_STREET_X_MAX, fz - 1, fz + 5));
+    exclusions.push(rect(ZONE_STREET_X_MIN, SUBURBAN_ZONE_STREET_X_MAX, fz + 17, fz + 23));
     exclusions.push(rect(-70, 70, fz - 10, fz + 15));
     exclusions.push(rect(-70, 70, fz + 20, fz + 50));
     exclusions.push(rect(-50, 50, fz + 50, fz + 70));
@@ -754,13 +1872,13 @@ export const createUnifiedMapTrees = (scene) => {
     exclusions.push(rect(-8, 8, pz, pz + 125));
     exclusions.push(rect(12, 58, pz - 20, pz));
 
-    // ZONE_NW forest clearings + path - trees don't spawn here
-    ZONE_NW_CLEARING_CONFIG.forEach((c) => {
+    // ZONE_SW forest clearings + path
+    ZONE_SW_CLEARING_CONFIG.forEach((c) => {
         exclusions.push(rect(c.x - c.radius, c.x + c.radius, c.z - c.radius, c.z + c.radius));
     });
-    for (let i = 0; i < ZONE_NW_PATH_WAYPOINTS.length - 1; i++) {
-        const p1 = ZONE_NW_PATH_WAYPOINTS[i];
-        const p2 = ZONE_NW_PATH_WAYPOINTS[i + 1];
+    for (let i = 0; i < ZONE_SW_PATH_WAYPOINTS.length - 1; i++) {
+        const p1 = ZONE_SW_PATH_WAYPOINTS[i];
+        const p2 = ZONE_SW_PATH_WAYPOINTS[i + 1];
         const halfW = 2.5;
         const minX = Math.min(p1.x, p2.x) - halfW;
         const maxX = Math.max(p1.x, p2.x) + halfW;
@@ -769,21 +1887,31 @@ export const createUnifiedMapTrees = (scene) => {
         exclusions.push(rect(minX, maxX, minZ, maxZ));
     }
 
-    // ZONE_SE hill - no trees on the slope
+    // ZONE_W carnival - no trees on grounds
     exclusions.push(rect(
-        ZONE_SE_HILL.x - ZONE_SE_HILL.radius,
-        ZONE_SE_HILL.x + ZONE_SE_HILL.radius,
-        ZONE_SE_HILL.z - ZONE_SE_HILL.radius,
-        ZONE_SE_HILL.z + ZONE_SE_HILL.radius
+        ZONE_W_CARNIVAL.x - ZONE_W_CARNIVAL.radius,
+        ZONE_W_CARNIVAL.x + ZONE_W_CARNIVAL.radius,
+        ZONE_W_CARNIVAL.z - ZONE_W_CARNIVAL.radius,
+        ZONE_W_CARNIVAL.z + ZONE_W_CARNIVAL.radius
     ));
 
-    // ZONE_NE mansion compound
-    const m = ZONE_NE_MANSION;
+    // ZONE_NW mansion compound
+    const m = ZONE_NW_MANSION;
     exclusions.push(rect(
         m.x - m.width / 2,
         m.x + m.width / 2,
         m.z - m.depth / 2,
         m.z + m.depth / 2
+    ));
+
+    // River (right column) - no trees in water, plus 10 feet buffer on each bank
+    const r = RIVER_CONFIG;
+    const RIVER_TREE_BUFFER = 10;
+    exclusions.push(rect(
+        r.x - r.halfWidth - RIVER_TREE_BUFFER,
+        r.x + r.halfWidth + RIVER_TREE_BUFFER,
+        r.zMin,
+        r.zMax
     ));
 
     const isExcluded = (wx, wz) => {
@@ -831,25 +1959,58 @@ export const createUnifiedMapTrees = (scene) => {
         }
     }
 
+    const cameraDir = new THREE.Vector3();
+
+    const inSpawnRegion = (dx, dz, d, dot, lateral, useKeep) => {
+        const core = useKeep ? CORE_KEEP : CORE_RADIUS;
+        const fwd = useKeep ? FORWARD_KEEP : FORWARD_RADIUS;
+        const lat = useKeep ? LATERAL_KEEP : LATERAL_SPAN;
+        const rear = useKeep ? REAR_KEEP : REAR_RADIUS;
+        return d < core ||
+            (dot > 0 && dot < fwd && lateral < lat) ||
+            (dot < 0 && d < rear);
+    };
+
     const update = (camera) => {
         const cx = camera.position.x;
         const cz = camera.position.z;
+        camera.getWorldDirection(cameraDir);
+        const lenXZ = Math.sqrt(cameraDir.x * cameraDir.x + cameraDir.z * cameraDir.z) || 1e-6;
+        const dirX = cameraDir.x / lenXZ;
+        const dirZ = cameraDir.z / lenXZ;
+
+        const toSpawn = [];
+
         for (const entry of registry) {
-            const dx = cx - entry.x;
-            const dz = cz - entry.z;
+            const dx = entry.x - cx;
+            const dz = entry.z - cz;
             const d = Math.sqrt(dx * dx + dz * dz);
-            if (d < SPAWN_RADIUS && !entry.mesh) {
-                entry.mesh = createTree(entry.x, entry.z, entry.scale, entry.species);
-                treeGroup.add(entry.mesh);
-            } else if (d > DESPAWN_RADIUS && entry.mesh) {
-                treeGroup.remove(entry.mesh);
-                disposeTree(entry.mesh);
-                entry.mesh = null;
+            const dot = dx * dirX + dz * dirZ;
+            const lateral = Math.sqrt(Math.max(0, d * d - dot * dot));
+
+            const shouldSpawn = inSpawnRegion(dx, dz, d, dot, lateral, false);
+            const shouldKeep = inSpawnRegion(dx, dz, d, dot, lateral, true);
+
+            if (entry.mesh) {
+                if (!shouldKeep) {
+                    treeGroup.remove(entry.mesh);
+                    disposeTree(entry.mesh);
+                    entry.mesh = null;
+                }
+            } else if (shouldSpawn) {
+                toSpawn.push({ entry, d });
             }
+        }
+
+        toSpawn.sort((a, b) => a.d - b.d);
+        for (let i = 0; i < Math.min(SPAWN_BATCH, toSpawn.length); i++) {
+            const { entry } = toSpawn[i];
+            entry.mesh = createTree(entry.x, entry.z, entry.scale, entry.species);
+            treeGroup.add(entry.mesh);
         }
     };
 
-    console.log(`🌲 Tree registry: ${registry.length} positions (distance-based spawn/despawn)`);
+    console.log(`🌲 Tree registry: ${registry.length} positions (direction-aware spawn: core=${CORE_RADIUS}, forward=${FORWARD_RADIUS}, batch=${SPAWN_BATCH})`);
     scene.add(treeGroup);
     return { treeGroup, update };
 };
@@ -1125,34 +2286,79 @@ export const createZoneScene = (scene, zoneConfig, zoneOffset, zoneKey) => {
     streetElements.parkingElementsGroup = parkingElementsGroup;
     
     // Create a proper street layout
-    
-    // Create ground planes using configuration
-    
-    // Main street (where cars drive) - extended to meet connector roads at x=±170
-    const streetGeometry = new THREE.PlaneGeometry(ZONE_STREET_WIDTH, 12, 20, 3);
-    const streetMaterial = new THREE.MeshBasicMaterial({ color: 0x444444 }); // Dark street color - solid material
-    const street = new THREE.Mesh(streetGeometry, streetMaterial);
-    street.rotation.x = -Math.PI / 2;
-    street.position.set(0, -0.12, config.STREET_Z);
-    zoneRootGroup.add(street);
+    const isCityMap = zoneSceneKey.startsWith('CITY_');
+
+    // Main street (where cars drive). City map: connector roads provide asphalt; only suburbs draw zone street.
+    // Suburban: street stops before river (x=280); city uses full extent.
+    const streetCenterX = isCityMap ? 0 : (ZONE_STREET_X_MIN + SUBURBAN_ZONE_STREET_X_MAX) / 2;
+    const streetWidth = isCityMap ? ZONE_STREET_WIDTH : SUBURBAN_ZONE_STREET_WIDTH;
+    let street = null;
+    if (!isCityMap) {
+        const streetGeometry = new THREE.PlaneGeometry(streetWidth, 12, 20, 3);
+        const streetMaterial = new THREE.MeshBasicMaterial({ color: 0x444444 });
+        street = new THREE.Mesh(streetGeometry, streetMaterial);
+        street.rotation.x = -Math.PI / 2;
+        street.position.set(streetCenterX, -0.12, config.STREET_Z);
+        zoneRootGroup.add(street);
+    }
     streetElements.street = street;
     
-    // Near sidewalk (where shops are) - extended to meet connector roads
-    const nearSidewalkGeometry = new THREE.PlaneGeometry(ZONE_STREET_WIDTH, 6, 20, 2);
-    const sidewalkMaterial = new THREE.MeshBasicMaterial({ color: 0x888888 }); // Solid sidewalk material
-    const nearSidewalk = new THREE.Mesh(nearSidewalkGeometry, sidewalkMaterial);
-    nearSidewalk.rotation.x = -Math.PI / 2;
-    nearSidewalk.position.set(0, -0.18, config.NEAR_SIDEWALK_Z);
-    zoneRootGroup.add(nearSidewalk);
-    streetElements.nearSidewalk = nearSidewalk;
-    
-    // Far sidewalk - extended to meet connector roads
-    const farSidewalkGeometry = new THREE.PlaneGeometry(ZONE_STREET_WIDTH, 6, 20, 2);
-    const farSidewalk = new THREE.Mesh(farSidewalkGeometry, sidewalkMaterial);
-    farSidewalk.rotation.x = -Math.PI / 2;
-    farSidewalk.position.set(0, -0.18, config.FAR_SIDEWALK_Z);
-    zoneRootGroup.add(farSidewalk);
-    streetElements.farSidewalk = farSidewalk;
+    // Near and far sidewalks. City map: use segmented geometry to avoid junction corner overlap.
+    const sidewalkMaterial = new THREE.MeshBasicMaterial({ color: 0x888888 });
+    const SIDEWALK_DEPTH = 6;
+    const JUNCTION_CLIP_MARGIN = 12;
+
+    const addSidewalkSegments = (sidewalkZ, container) => {
+        if (isCityMap) {
+            const sortedConnX = [...CITY_CONNECTOR_X].sort((a, b) => a - b);
+            let xStart = ZONE_STREET_X_MIN;
+            for (const connX of sortedConnX) {
+                const clipStart = connX - JUNCTION_CLIP_MARGIN;
+                const clipEnd = connX + JUNCTION_CLIP_MARGIN;
+                if (xStart < clipStart) {
+                    const width = clipStart - xStart;
+                    const seg = new THREE.Mesh(
+                        new THREE.PlaneGeometry(width, SIDEWALK_DEPTH, 1, 1),
+                        sidewalkMaterial.clone()
+                    );
+                    seg.rotation.x = -Math.PI / 2;
+                    seg.position.set((xStart + clipStart) / 2, GROUND_LAYERS.concrete, sidewalkZ);
+                    container.add(seg);
+                }
+                xStart = Math.max(xStart, clipEnd);
+            }
+            if (xStart < ZONE_STREET_X_MAX) {
+                const width = ZONE_STREET_X_MAX - xStart;
+                const seg = new THREE.Mesh(
+                    new THREE.PlaneGeometry(width, SIDEWALK_DEPTH, 1, 1),
+                    sidewalkMaterial.clone()
+                );
+                seg.rotation.x = -Math.PI / 2;
+                seg.position.set((xStart + ZONE_STREET_X_MAX) / 2, GROUND_LAYERS.concrete, sidewalkZ);
+                container.add(seg);
+            }
+        } else {
+            const sw = new THREE.Mesh(
+                new THREE.PlaneGeometry(streetWidth, SIDEWALK_DEPTH, 20, 2),
+                sidewalkMaterial.clone()
+            );
+            sw.rotation.x = -Math.PI / 2;
+            sw.position.set(streetCenterX, GROUND_LAYERS.concrete, sidewalkZ);
+            container.add(sw);
+        }
+    };
+
+    const nearSidewalkContainer = new THREE.Group();
+    nearSidewalkContainer.name = "NearSidewalk";
+    addSidewalkSegments(config.NEAR_SIDEWALK_Z, nearSidewalkContainer);
+    zoneRootGroup.add(nearSidewalkContainer);
+    streetElements.nearSidewalk = nearSidewalkContainer;
+
+    const farSidewalkContainer = new THREE.Group();
+    farSidewalkContainer.name = "FarSidewalk";
+    addSidewalkSegments(config.FAR_SIDEWALK_Z, farSidewalkContainer);
+    zoneRootGroup.add(farSidewalkContainer);
+    streetElements.farSidewalk = farSidewalkContainer;
     
     // Back parking lot lines - only for city scene (no gray ground; lines sit on base concrete)
     if (!config.FRONT_IS_PARK && !config.FRONT_IS_POND) {
@@ -1189,20 +2395,26 @@ export const createZoneScene = (scene, zoneConfig, zoneOffset, zoneKey) => {
         console.log("🌳 Skipped parking lot creation for forest scene");
     }
     
-    // Sidewalk lines for texture (every 12 feet)
+    // Sidewalk lines for texture (every 6 units). City map: skip junction regions.
     const createSidewalkLines = () => {
         const lineGroup = new THREE.Group();
-        const lineMaterial = new THREE.MeshBasicMaterial({ color: 0x666666 }); // Slightly darker than sidewalk
-        
-        // Create lines every 12 feet (12 units) across the sidewalk width
-        for (let x = ZONE_STREET_X_MIN; x <= ZONE_STREET_X_MAX; x += 6) {
+        const lineMaterial = new THREE.MeshBasicMaterial({ color: 0x666666 });
+
+        const inJunctionClip = (x) => {
+            if (!isCityMap) return false;
+            return CITY_CONNECTOR_X.some((connX) => x >= connX - JUNCTION_CLIP_MARGIN && x <= connX + JUNCTION_CLIP_MARGIN);
+        };
+
+        const sidewalkXMax = isCityMap ? ZONE_STREET_X_MAX : SUBURBAN_ZONE_STREET_X_MAX;
+        for (let x = ZONE_STREET_X_MIN; x <= sidewalkXMax; x += 6) {
+            if (inJunctionClip(x)) continue;
             const lineGeometry = new THREE.PlaneGeometry(0.1, 6, 1, 1);
-            const line = new THREE.Mesh(lineGeometry, lineMaterial);
+            const line = new THREE.Mesh(lineGeometry, lineMaterial.clone());
             line.rotation.x = -Math.PI / 2;
-            line.position.set(x, -0.17, 0); // Slightly above sidewalk surface
+            line.position.set(x, GROUND_LAYERS.sidewalkLines, 0);
             lineGroup.add(line);
         }
-        
+
         return lineGroup;
     };
     
@@ -1221,35 +2433,75 @@ export const createZoneScene = (scene, zoneConfig, zoneOffset, zoneKey) => {
         const yellowMaterial = new THREE.MeshBasicMaterial({ color: 0xFFFF00 }); // Yellow center lines
         const whiteMaterial = new THREE.MeshBasicMaterial({ color: 0xFFFFFF }); // White lane dividers
         
-        // Solid double yellow center line (running along the road length)
-        // Top yellow line
-        const topYellowGeometry = new THREE.PlaneGeometry(ZONE_STREET_WIDTH, 0.1, 1, 1); // Full road length
-        const topYellowLine = new THREE.Mesh(topYellowGeometry, yellowMaterial);
-        topYellowLine.rotation.x = -Math.PI / 2;
-        topYellowLine.position.set(0, -0.10, 0.1); // Slightly above asphalt
-        lineGroup.add(topYellowLine);
+        // Double yellow center line - gapped where vertical connectors cross (horizontal road runs in X)
+        const yellowGapHalf = 10;
+        const xMin = ZONE_STREET_X_MIN;
+        const xMax = isCityMap ? ZONE_STREET_X_MAX : SUBURBAN_ZONE_STREET_X_MAX;
+        const allConnectorCrossings = isCityMap
+            ? [...CITY_CONNECTOR_X].sort((a, b) => a - b)
+            : [CONNECTOR_X.LEFT, CONNECTOR_X.RIGHT].sort((a, b) => a - b);
+        // Only gap for connectors that cross through; suburban right: yellow ends 5 units before white (165.05)
+        const connectorCrossings = allConnectorCrossings.filter((cx) => cx > xMin + yellowGapHalf && cx < xMax - yellowGapHalf);
+        const yellowXRanges = [];
+        let prevX = xMin;
+        for (const crossX of connectorCrossings) {
+            const gapStart = crossX - yellowGapHalf;
+            const gapEnd = crossX + yellowGapHalf;
+            if (prevX < gapStart) yellowXRanges.push([prevX, gapStart]);
+            prevX = Math.max(prevX, gapEnd);
+        }
+        if (prevX < xMax) yellowXRanges.push([prevX, xMax]);
+        // Suburban river end: yellow 5 units shorter than white (stops at 160.05, white at 165.05)
+        if (!isCityMap) {
+            const lastIdx = yellowXRanges.length - 1;
+            const last = yellowXRanges[lastIdx];
+            if (last && last[1] === xMax) {
+                yellowXRanges[lastIdx] = [last[0], xMax - 5];
+            }
+        }
+
+        const addYellowSegment = (xStart, xEnd, zOffset) => {
+            const len = xEnd - xStart;
+            if (len <= 0) return;
+            const mesh = new THREE.Mesh(
+                new THREE.PlaneGeometry(len, 0.1),
+                yellowMaterial.clone()
+            );
+            mesh.rotation.x = -Math.PI / 2;
+            mesh.position.set((xStart + xEnd) / 2, -0.10, zOffset);
+            lineGroup.add(mesh);
+        };
+        yellowXRanges.forEach(([xStart, xEnd]) => {
+            addYellowSegment(xStart, xEnd, 0.1);
+            addYellowSegment(xStart, xEnd, -0.1);
+        });
         
-        // Bottom yellow line
-        const bottomYellowGeometry = new THREE.PlaneGeometry(ZONE_STREET_WIDTH, 0.1, 1, 1); // Full road length
-        const bottomYellowLine = new THREE.Mesh(bottomYellowGeometry, yellowMaterial);
-        bottomYellowLine.rotation.x = -Math.PI / 2;
-        bottomYellowLine.position.set(0, -0.10, -0.1); // Slightly offset from center
-        lineGroup.add(bottomYellowLine);
-        
-        // White lane dividers (solid lines running along the road length)
-        // Left lane divider
-        const leftLineGeometry = new THREE.PlaneGeometry(ZONE_STREET_WIDTH, 0.1, 1, 1); // Full road length
-        const leftLine = new THREE.Mesh(leftLineGeometry, whiteMaterial);
-        leftLine.rotation.x = -Math.PI / 2;
-        leftLine.position.set(0, -0.10, 5); // Left side of road
-        lineGroup.add(leftLine);
-        
-        // Right lane divider
-        const rightLineGeometry = new THREE.PlaneGeometry(ZONE_STREET_WIDTH, 0.1, 1, 1); // Full road length
-        const rightLine = new THREE.Mesh(rightLineGeometry, whiteMaterial);
-        rightLine.rotation.x = -Math.PI / 2;
-        rightLine.position.set(0, -0.10, -5); // Right side of road
-        lineGroup.add(rightLine);
+        // White lane dividers - 165.05 corner match on both sides (gap at left junction, segment resumes at -165.05)
+        const addWhiteSegment = (xStart, xEnd, zOffset) => {
+            const len = xEnd - xStart;
+            if (len <= 0) return;
+            const mesh = new THREE.Mesh(
+                new THREE.PlaneGeometry(len, 0.1),
+                whiteMaterial.clone()
+            );
+            mesh.rotation.x = -Math.PI / 2;
+            mesh.position.set((xStart + xEnd) / 2, -0.10, zOffset);
+            lineGroup.add(mesh);
+        };
+        const whiteXRanges = isCityMap
+            ? yellowXRanges
+            : (() => {
+                if (yellowXRanges.length < 2) return yellowXRanges;
+                const [first] = yellowXRanges;
+                return [
+                    [first[0], SUBURBAN_LEFT_OUTER_CORNER_X],  // Carnival side: extend to connector outer (-175)
+                    [SUBURBAN_LEFT_CORNER_X, xMax]             // River side: always to 165.05 (independent of yellow)
+                ];
+            })();
+        whiteXRanges.forEach(([xStart, xEnd]) => {
+            addWhiteSegment(xStart, xEnd, 5);   // Left lane divider
+            addWhiteSegment(xStart, xEnd, -5);  // Right lane divider
+        });
         
         return lineGroup;
     };
@@ -1495,6 +2747,11 @@ export const createZoneScene = (scene, zoneConfig, zoneOffset, zoneKey) => {
 
     // Only create karaoke bar and shops for PLAZA scene
     if (!config.FRONT_IS_PARK && !config.FRONT_IS_POND) {
+    const zoneShopConfig = getShopsForZone(zoneSceneKey);
+    const shopHeight = config.SHOP_HEIGHT;
+    const facadeDepth = config.SHOP_DEPTH;
+
+    if (zoneShopConfig?.centerBar === 'karaoke') {
     // Karaoke Bar Building - created as a separate structure
     const buildingGroup = new THREE.Group();
     
@@ -2177,7 +3434,8 @@ export const createZoneScene = (scene, zoneConfig, zoneOffset, zoneKey) => {
     // Create the actual cutouts
     cutOutWindowInWall(window1, findWallWithWindow(window1.position.x));
     cutOutWindowInWall(window2, findWallWithWindow(window2.position.x));
-    
+    }
+
     // Create additional buildings along the street
     const createBuildingFacade = (x, z, width, height, depth, style) => {
         const buildingGroup = new THREE.Group();
@@ -2231,6 +3489,34 @@ export const createZoneScene = (scene, zoneConfig, zoneOffset, zoneKey) => {
                 windowColor = 0xFFFFFF; // White
                 roofColor = 0x333333; // Dark roof
                 break;
+            case 'bodega':
+                baseColor = 0xFF6600; windowColor = 0xFFFFFF; roofColor = 0x333333; break;
+            case 'pho':
+                baseColor = 0xCC3300; windowColor = 0xFFFFAA; roofColor = 0x333333; break;
+            case 'tattoo':
+                baseColor = 0x1a1a1a; windowColor = 0xFFFFFF; roofColor = 0x222222; break;
+            case 'vinyl_coffee':
+                baseColor = 0x4a3728; windowColor = 0xFFFFFF; roofColor = 0x333333; break;
+            case 'dive_bar':
+                baseColor = 0x2a1810; windowColor = 0xFF6600; roofColor = 0x1a0f0a; break;
+            case 'arcade_bar':
+                baseColor = 0x222222; windowColor = 0xFF00FF; roofColor = 0x111111; break;
+            case 'record_store':
+                baseColor = 0x8B0000; windowColor = 0xFFFFFF; roofColor = 0x333333; break;
+            case 'laundromat':
+                baseColor = 0x00AAFF; windowColor = 0xFFFFFF; roofColor = 0x0066AA; break;
+            case 'corner_cafe':
+                baseColor = 0xD2691E; windowColor = 0xFFFFFF; roofColor = 0x663300; break;
+            case 'bookshop':
+                baseColor = 0x8B4513; windowColor = 0xFFFFAA; roofColor = 0x4a2c0a; break;
+            case 'sushi':
+                baseColor = 0x2F4F4F; windowColor = 0xFF6666; roofColor = 0x1a2a2a; break;
+            case 'vintage':
+                baseColor = 0x996633; windowColor = 0xFFFFFF; roofColor = 0x4a3319; break;
+            case 'bubble_tea':
+                baseColor = 0xFFB6C1; windowColor = 0xFFFFFF; roofColor = 0xFF69B4; break;
+            case 'smoke_shop':
+                baseColor = 0x228B22; windowColor = 0x90EE90; roofColor = 0x1a5c1a; break;
             case 'industrial':
                 baseColor = 0x777777; // Gray
                 windowColor = 0x99AAAA; // Gray blue
@@ -2777,30 +4063,46 @@ export const createZoneScene = (scene, zoneConfig, zoneOffset, zoneKey) => {
         return buildingGroup;
     };
     
-    // Create specific Massachusetts plaza shops using configuration
-    const facadeDepth = config.SHOP_DEPTH; // Depth for all buildings
-    const shopHeight = config.SHOP_HEIGHT; // Standard shop height
     const shopGap = 1; // Small gap between shops
-    
+
     // Initialize building portals array if it doesn't exist
     if (!streetElements.buildingPortals) {
         streetElements.buildingPortals = [];
     }
-    
-    // Define our 6 specific shops with their characteristics
-    const plazaShops = [
-        { name: 'Grumby\'s', width: 18, style: 'convenience', signColor: 0xFFFFFF },
-        { name: 'Grohos', width: 16, style: 'pizza', signColor: 0xFFFFFF },
-        { name: 'Clothing Store', width: 14, style: 'clothing', signColor: 0xFFFFFF },
-        { name: 'Dry Cleaners', width: 12, style: 'drycleaner', signColor: 0x000000 },
-        { name: 'Donut Galaxy', width: 15, style: 'coffee', signColor: 0xFFFFFF },
-        { name: 'Flower Shop', width: 13, style: 'flowers', signColor: 0x000000 }
-    ];
-    
-    // Position shops in a line, keeping the karaoke bar in the center
-    let currentX = config.SHOP_ROW_START_X; // Start from left side of plaza
-    
-    plazaShops.forEach((shop, index) => {
+
+    // Create center bar building for dive_bar / arcade_bar zones (karaoke is created above)
+    if (zoneShopConfig && (zoneShopConfig.centerBar === 'dive_bar' || zoneShopConfig.centerBar === 'arcade_bar')) {
+        const centerBarWidth = 18;
+        const centerBarName = zoneShopConfig.centerBar === 'dive_bar' ? 'The Dive' : 'Pixel Arcade';
+        const centerBuilding = createBuildingFacade(config.KARAOKE_BAR_X, 0, centerBarWidth, shopHeight, facadeDepth, zoneShopConfig.centerBar);
+        centerBuilding.userData.buildingName = centerBarName;
+        centerBuilding.userData.buildingStyle = zoneShopConfig.centerBar;
+        frontShopsGroup.add(centerBuilding);
+
+        const doorWorldX = offset.x + config.KARAOKE_BAR_X;
+        const doorWorldZ = offset.z + config.FRONT_SHOPS_Z;
+        streetElements.buildingPortals.push({
+            building: centerBuilding,
+            position: new THREE.Vector3(doorWorldX, 0, doorWorldZ),
+            name: centerBarName,
+            style: zoneShopConfig.centerBar,
+            zoneKey: zoneSceneKey,
+            zoneOffset: offset,
+            isFarBuilding: false
+        });
+        console.log(`🏪 Added portal for ${centerBarName} at (${doorWorldX.toFixed(1)}, ${doorWorldZ.toFixed(1)})`);
+
+        const barSignGeometry = new THREE.BoxGeometry(6, 0.8, 0.3);
+        const barSign = new THREE.Mesh(barSignGeometry, createWireframeMaterial(zoneShopConfig.centerBar === 'dive_bar' ? 0x8B4513 : 0xFF00FF));
+        barSign.position.set(config.KARAOKE_BAR_X, shopHeight + 0.6, 0.2);
+        frontShopsGroup.add(barSign);
+        streetElements.sign = barSign;
+    }
+
+    // Position shops in a line, keeping the center bar (karaoke/dive/arcade) in the middle
+    let currentX = config.SHOP_ROW_START_X;
+
+    zoneShopConfig.shops.forEach((shop, index) => {
         // Skip the center position where karaoke bar is
         if (currentX > -12 && currentX < 12) {
             currentX = 22; // Jump to right side of karaoke bar
@@ -2847,46 +4149,32 @@ export const createZoneScene = (scene, zoneConfig, zoneOffset, zoneKey) => {
     
     // NPCs will be created by the createNPCs function later in the scene creation
     
-    // Add buildings on the opposite side - these go behind the main shops (the plaza layout)
-    
-    // Karaoke Sign above the door
-    const signGeometry = new THREE.BoxGeometry(10, 1.2, 0.5, 6, 2, 1); // Larger sign
-    const signMaterial = createWireframeMaterial(0xff00ff); // Magenta sign
+    // Karaoke sign above the door (only for karaoke bar zones)
+    if (zoneShopConfig.centerBar === 'karaoke') {
+    const buildingHeight = 5; // Karaoke building height
+    const signGeometry = new THREE.BoxGeometry(10, 1.2, 0.5, 6, 2, 1);
+    const signMaterial = createWireframeMaterial(0xff00ff);
     const sign = new THREE.Mesh(signGeometry, signMaterial);
-    sign.position.set(0, buildingHeight + 0.8, 0.5); // Above the door
-    frontShopsGroup.add(sign); // Add to front shops group instead of exterior
+    sign.position.set(0, buildingHeight + 0.8, 0.5);
+    frontShopsGroup.add(sign);
     streetElements.sign = sign;
-    
-    // "KARAOKE" text on the sign
+
     const textGroup = new THREE.Group();
-    textGroup.position.set(-4, buildingHeight + 0.8, 0.7); // On the sign
-    
-    // Create "KARAOKE" letters - improved sizing and spacing
+    textGroup.position.set(-4, buildingHeight + 0.8, 0.7);
     const letterPositions = [
-        { x: 0, y: 0, z: 0 },    // K
-        { x: 1.0, y: 0, z: 0 },  // A
-        { x: 2.0, y: 0, z: 0 },  // R
-        { x: 3.0, y: 0, z: 0 },  // A
-        { x: 4.0, y: 0, z: 0 },  // O
-        { x: 5.0, y: 0, z: 0 },  // K
-        { x: 6.0, y: 0, z: 0 },  // E
-        { x: 7.0, y: 0, z: 0 },  // K
-        { x: 8.0, y: 0, z: 0 },  // E
+        { x: 0, y: 0, z: 0 }, { x: 1.0, y: 0, z: 0 }, { x: 2.0, y: 0, z: 0 },
+        { x: 3.0, y: 0, z: 0 }, { x: 4.0, y: 0, z: 0 }, { x: 5.0, y: 0, z: 0 },
+        { x: 6.0, y: 0, z: 0 }, { x: 7.0, y: 0, z: 0 }, { x: 8.0, y: 0, z: 0 }
     ];
-    
-    // Create simple wireframe boxes for each letter - larger
     letterPositions.forEach((pos, index) => {
-        // Alternate colors for a flashing effect
         const letterColor = index % 2 === 0 ? 0xff0000 : 0x00ffff;
-        const letterGeometry = new THREE.BoxGeometry(0.8, 0.8, 0.2, 2, 2, 1);
-        const letterMaterial = createWireframeMaterial(letterColor);
-        const letter = new THREE.Mesh(letterGeometry, letterMaterial);
+        const letter = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.2, 2, 2, 1), createWireframeMaterial(letterColor));
         letter.position.set(pos.x, pos.y, pos.z);
         textGroup.add(letter);
     });
-    
-    frontShopsGroup.add(textGroup); // Add to front shops group instead of exterior
+    frontShopsGroup.add(textGroup);
     streetElements.karaokeSigns = textGroup;
+    }
     
     // Street Lamps - positioned on both sidewalks
     const createStreetLamp = (x, z) => {
@@ -2936,37 +4224,40 @@ export const createZoneScene = (scene, zoneConfig, zoneOffset, zoneKey) => {
         return lampGroup;
     };
     
+    // Exclude placements where vertical connectors (cross streets) meet the zone street
+    const INTERSECTION_EXCLUSION = 18;
+    const connectorXList = isCityMap ? CITY_CONNECTOR_X : [CONNECTOR_X.LEFT, CONNECTOR_X.RIGHT];
+    const nearIntersection = (x) => connectorXList.some((cx) => Math.abs(x - cx) < INTERSECTION_EXCLUSION);
+
     // Add street lamps on both sides - organized by sidewalk groups
     const nearLampLeft = createStreetLamp(-10);   // Near building, left
     const nearLampRight = createStreetLamp(10);   // Near building, right
     const farLampLeft = createStreetLamp(-10);    // Far side, left
     const farLampRight = createStreetLamp(10);    // Far side, right
-    
-    // Add near sidewalk lamps to near sidewalk group
-    nearSidewalkElementsGroup.add(nearLampLeft);
-    nearSidewalkElementsGroup.add(nearLampRight);
-    
-    // Add far sidewalk lamps to far sidewalk group
-    farSidewalkElementsGroup.add(farLampLeft);
-    farSidewalkElementsGroup.add(farLampRight);
-    
+
+    if (!nearIntersection(-10) && !nearIntersection(10)) {
+        nearSidewalkElementsGroup.add(nearLampLeft);
+        nearSidewalkElementsGroup.add(nearLampRight);
+        farSidewalkElementsGroup.add(farLampLeft);
+        farSidewalkElementsGroup.add(farLampRight);
+    }
+
     // Add more street lamps along the street for better coverage
     const additionalLamps = [];
-    for (let x = -120; x <= 120; x += 30) { // Every 30 units along the street
-        if (x !== -10 && x !== 10 && x !== 0) { // Skip positions where we already have lamps and center
-            // Near sidewalk lamps
+    for (let x = -120; x <= 120; x += 30) {
+        if ((x !== -10 && x !== 10 && x !== 0) && !nearIntersection(x)) {
             const nearLamp = createStreetLamp(x);
             nearSidewalkElementsGroup.add(nearLamp);
             additionalLamps.push(nearLamp);
-            
-            // Far sidewalk lamps
             const farLamp = createStreetLamp(x);
             farSidewalkElementsGroup.add(farLamp);
             additionalLamps.push(farLamp);
         }
     }
     
-    streetElements.streetLamps = [nearLampLeft, nearLampRight, farLampLeft, farLampRight, ...additionalLamps];
+    const baseLamps = (!nearIntersection(-10) && !nearIntersection(10))
+        ? [nearLampLeft, nearLampRight, farLampLeft, farLampRight] : [];
+    streetElements.streetLamps = [...baseLamps, ...additionalLamps];
 
     // Create a bench
     const createBench = (x) => {
@@ -3025,18 +4316,13 @@ export const createZoneScene = (scene, zoneConfig, zoneOffset, zoneKey) => {
         return trashGroup;
     };
     
-    // Original benches removed - they were facing the wrong way
-    
-    // Add more benches along the street for better coverage
+    // Add benches along the street (exclude intersection corners)
     const additionalBenches = [];
-    for (let x = -100; x <= 100; x += 25) { // Every 25 units along the street
-        if (x !== -8 && x !== 8 && x !== 0) { // Skip positions where we already have benches and center
-            // Near sidewalk benches
+    for (let x = -100; x <= 100; x += 25) {
+        if ((x !== -8 && x !== 8 && x !== 0) && !nearIntersection(x)) {
             const nearBench = createBench(x);
             nearSidewalkElementsGroup.add(nearBench);
             additionalBenches.push(nearBench);
-            
-            // Far sidewalk benches
             const farBench = createBench(x);
             farSidewalkElementsGroup.add(farBench);
             additionalBenches.push(farBench);
@@ -3044,44 +4330,42 @@ export const createZoneScene = (scene, zoneConfig, zoneOffset, zoneKey) => {
     }
     
     streetElements.benches = [...additionalBenches];
-    
-    // Add trashcans organized by sidewalk groups
-    const nearTrashLeft = createTrashcan(-12);   // Near sidewalk, left
-    const nearTrashRight = createTrashcan(12);   // Near sidewalk, right
-    const farTrashLeft = createTrashcan(-12);    // Far sidewalk, left
-    const farTrashRight = createTrashcan(12);    // Far sidewalk, right
-    
-    // Add near sidewalk trashcans to near sidewalk group
-    nearSidewalkElementsGroup.add(nearTrashLeft);
-    nearSidewalkElementsGroup.add(nearTrashRight);
-    
-    // Add far sidewalk trashcans to far sidewalk group
-    farSidewalkElementsGroup.add(farTrashLeft);
-    farSidewalkElementsGroup.add(farTrashRight);
-    
-    // Add more trash cans along the street for better coverage (avoiding bench and lamp positions)
+
+    // Add trashcans (exclude intersection corners)
+    const baseTrash = [];
+    if (!nearIntersection(-12)) {
+        const nearTrashLeft = createTrashcan(-12);
+        const farTrashLeft = createTrashcan(-12);
+        nearSidewalkElementsGroup.add(nearTrashLeft);
+        farSidewalkElementsGroup.add(farTrashLeft);
+        baseTrash.push(nearTrashLeft, farTrashLeft);
+    }
+    if (!nearIntersection(12)) {
+        const nearTrashRight = createTrashcan(12);
+        const farTrashRight = createTrashcan(12);
+        nearSidewalkElementsGroup.add(nearTrashRight);
+        farSidewalkElementsGroup.add(farTrashRight);
+        baseTrash.push(nearTrashRight, farTrashRight);
+    }
+
     const additionalTrashCans = [];
-    for (let x = -110; x <= 110; x += 35) { // Every 35 units along the street
-        // Skip positions where we already have trash cans, benches, or lamps
-        const isBenchPosition = (x >= -8 && x <= -8) || (x >= 8 && x <= 8) || 
-                               (x >= -100 && x <= 100 && (x - (-100)) % 25 === 0); // Bench spacing every 25 units
-        const isLampPosition = (x >= -10 && x <= -10) || (x >= 10 && x <= 10) || 
-                              (x >= -120 && x <= 120 && (x - (-120)) % 30 === 0); // Lamp spacing every 30 units
-        
-        if (x !== -12 && x !== 12 && !isBenchPosition && !isLampPosition) {
-            // Near sidewalk trash cans
+    const tooCloseToOther = (x) => {
+        for (let b = -100; b <= 100; b += 25) if (Math.abs(x - b) < 6) return true;
+        for (let L = -120; L <= 120; L += 30) if (Math.abs(x - L) < 6) return true;
+        return false;
+    };
+    for (let x = -110; x <= 110; x += 35) {
+        if (x !== -12 && x !== 12 && !tooCloseToOther(x) && !nearIntersection(x)) {
             const nearTrash = createTrashcan(x);
             nearSidewalkElementsGroup.add(nearTrash);
             additionalTrashCans.push(nearTrash);
-            
-            // Far sidewalk trash cans
             const farTrash = createTrashcan(x);
             farSidewalkElementsGroup.add(farTrash);
             additionalTrashCans.push(farTrash);
         }
     }
-    
-    streetElements.trashcans = [nearTrashLeft, nearTrashRight, farTrashLeft, farTrashRight, ...additionalTrashCans];
+
+    streetElements.trashcans = [...baseTrash, ...additionalTrashCans];
 
     // Rotate all benches to face the street properly
     streetElements.benches.forEach((bench, index) => {
@@ -3114,15 +4398,16 @@ export const createZoneScene = (scene, zoneConfig, zoneOffset, zoneKey) => {
     } 
     
     // Add cars driving on the street - organized to street group with proper lane positioning
+    const horizontalBounds = isCityMap ? HORIZONTAL_BOUNDS : SUBURBAN_HORIZONTAL_BOUNDS;
     let car1, car2, car3, car4;
     car1 = createCar(-120, getRandomCarColor(), 'left');   // Car on left lane, far left
-    car1.position.z = 2; car1.userData.roadType = 'horizontal'; car1.userData.zoneKey = zoneSceneKey; car1.userData.bounds = { ...HORIZONTAL_BOUNDS };
+    car1.position.z = 2; car1.userData.roadType = 'horizontal'; car1.userData.zoneKey = zoneSceneKey; car1.userData.bounds = { ...horizontalBounds };
     car2 = createCar(120, getRandomCarColor(), 'right');   // Car on right lane, far right
-    car2.position.z = -2; car2.userData.roadType = 'horizontal'; car2.userData.zoneKey = zoneSceneKey; car2.userData.bounds = { ...HORIZONTAL_BOUNDS };
+    car2.position.z = -2; car2.userData.roadType = 'horizontal'; car2.userData.zoneKey = zoneSceneKey; car2.userData.bounds = { ...horizontalBounds };
     car3 = createCar(-60, getRandomCarColor(), 'left');   // Car on left lane, mid-left
-    car3.position.z = 2; car3.userData.roadType = 'horizontal'; car3.userData.zoneKey = zoneSceneKey; car3.userData.bounds = { ...HORIZONTAL_BOUNDS };
+    car3.position.z = 2; car3.userData.roadType = 'horizontal'; car3.userData.zoneKey = zoneSceneKey; car3.userData.bounds = { ...horizontalBounds };
     car4 = createCar(60, getRandomCarColor(), 'right');   // Car on right lane, mid-right
-    car4.position.z = -2; car4.userData.roadType = 'horizontal'; car4.userData.zoneKey = zoneSceneKey; car4.userData.bounds = { ...HORIZONTAL_BOUNDS };
+    car4.position.z = -2; car4.userData.roadType = 'horizontal'; car4.userData.zoneKey = zoneSceneKey; car4.userData.bounds = { ...horizontalBounds };
     
     // Add cars to street group
     streetElementsGroup.add(car1);
@@ -3138,7 +4423,7 @@ export const createZoneScene = (scene, zoneConfig, zoneOffset, zoneKey) => {
     // Add a bus to the street group with proper lane positioning
     const busStopX = config.ROAD_POSITION_X ? config.ROAD_POSITION_X + 3 : -15;
     const bus = createBus(-140, 0xFFFFFF, 'right'); // White MBTA bus, start at far left
-    bus.position.z = -3.75; bus.userData.roadType = 'horizontal'; bus.userData.zoneKey = zoneSceneKey; bus.userData.bounds = { ...HORIZONTAL_BOUNDS }; bus.userData.busStopX = busStopX;
+    bus.position.z = -3.75; bus.userData.roadType = 'horizontal'; bus.userData.zoneKey = zoneSceneKey; bus.userData.bounds = { ...horizontalBounds }; bus.userData.busStopX = busStopX;
     streetElementsGroup.add(bus);
     streetElements.bus = bus;
     
@@ -3190,8 +4475,8 @@ export const createZoneScene = (scene, zoneConfig, zoneOffset, zoneKey) => {
     // Define facade depth for buildings (needed for both scenes)
     const facadeDepth = 15; // Standard building depth
     
-    // Create far buildings (only for PLAZA and FOREST_SUBURBAN scenes, not POND)
-    if (!config.FRONT_IS_POND) {
+    // Create far buildings (only for PLAZA and FOREST_SUBURBAN scenes, not POND or city)
+    if (!config.FRONT_IS_POND && !isCityMap) {
         // Buildings on the far side, using a consistent approach across the entire street width
         // Define the total street coverage range
         const streetLeftEdge = -40;

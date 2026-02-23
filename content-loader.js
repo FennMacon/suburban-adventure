@@ -145,7 +145,8 @@ const FLAVOR_FILES = [
     'donut.txt',
     'supermarket.txt',
     'clearings.txt',
-    'flowers.txt'
+    'flowers.txt',
+    'carnival.txt'
 ];
 
 export async function loadAllContent() {

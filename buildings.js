@@ -86,7 +86,10 @@ export const createBuildingFacade = (width, height, depth, style, signText, sign
         groton_house: 0xA0522D,
         hospital: 0xE6E6FA,
         graveyard: 0x2F4F4F,
-        mansion: 0xC4B8A8
+        mansion: 0xC4B8A8,
+        triple_decker: 0xB87333,
+        brick: 0x8B4513,
+        storefront_urban: 0x4A4A4A
     };
     
     const roofColors = {
@@ -95,6 +98,9 @@ export const createBuildingFacade = (width, height, depth, style, signText, sign
         groton_colonial: 0x8B4513,
         groton_house: 0x696969,
         mansion: 0x2a2a2a,
+        triple_decker: 0x2a2a2a,
+        brick: 0x4a2020,
+        storefront_urban: 0x333333,
         default: 0x654321
     };
     
@@ -452,6 +458,311 @@ export const createBuildingFacade = (width, height, depth, style, signText, sign
     buildingGroup.add(frontWallGroup);
     
     return buildingGroup;
+};
+
+// ============================================================
+// TRIPLE DECKER MODELS - 5 variants (Boston Allston-style)
+// Based on: full porches, bay windows, column styles, jut-outs
+// ============================================================
+
+const TRIPLE_DECKER_WIDTH = 11;
+const TRIPLE_DECKER_HEIGHT = 9;
+const TRIPLE_DECKER_DEPTH = 7;
+const FLOOR_HEIGHT = 3;
+
+/** Model 1: Classic full porch - 3-level open porch, square columns, warm wood siding */
+const createTripleDeckerClassicPorch = () => {
+    const g = new THREE.Group();
+    const w = TRIPLE_DECKER_WIDTH;
+    const h = TRIPLE_DECKER_HEIGHT;
+    const d = TRIPLE_DECKER_DEPTH;
+    const wallMat = createWireframeMaterial(0xB87333);  // Warm wood
+    const porchMat = createWireframeMaterial(0x8B6914);  // Darker porch
+    const roofMat = createWireframeMaterial(0x2a2a2a);
+    const windowMat = createWireframeMaterial(0x87CEEB);
+
+    const porchDepth = 1.8;
+    const colW = 0.2;
+    const colH = FLOOR_HEIGHT - 0.3;
+
+    // Main body - 3 floors
+    const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallMat);
+    body.position.set(0, h / 2, -d / 2);
+    g.add(body);
+
+    // Windows - stacked 2 per floor
+    for (let floor = 0; floor < 3; floor++) {
+        const baseY = floor * FLOOR_HEIGHT + 1.2;
+        [-2.5, 2.5].forEach((ox) => {
+            const win = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.4, 0.08), windowMat);
+            win.position.set(ox, baseY, 0.05);
+            g.add(win);
+        });
+    }
+
+    // Door ground floor
+    const door = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.2, 0.12), createWireframeMaterial(0x5D4037));
+    door.position.set(0, 1.1, 0.05);
+    g.add(door);
+
+    // Porch platform (all 3 levels)
+    for (let floor = 0; floor < 3; floor++) {
+        const py = floor * FLOOR_HEIGHT + 0.08;
+        const deck = new THREE.Mesh(
+            new THREE.BoxGeometry(w + 0.4, 0.15, porchDepth),
+            porchMat
+        );
+        deck.position.set(0, py, porchDepth / 2);
+        g.add(deck);
+
+        // Square columns - 4 corners
+        [[-w/2 - 0.1, -0.1], [w/2 + 0.1, -0.1], [-w/2 - 0.1, porchDepth + 0.1], [w/2 + 0.1, porchDepth + 0.1]].forEach(([px, pz]) => {
+            const col = new THREE.Mesh(new THREE.BoxGeometry(colW, colH, colW), porchMat);
+            col.position.set(px, py + colH/2, pz);
+            g.add(col);
+        });
+    }
+
+    // Flat roof
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(w + 0.6, 0.2, d + 0.4), roofMat);
+    roof.position.set(0, h + 0.1, -d/2);
+    g.add(roof);
+
+    return g;
+};
+
+/** Model 2: Bay window - projecting bays instead of porch, gray clapboard */
+const createTripleDeckerBayWindow = () => {
+    const g = new THREE.Group();
+    const w = TRIPLE_DECKER_WIDTH;
+    const h = TRIPLE_DECKER_HEIGHT;
+    const d = TRIPLE_DECKER_DEPTH;
+    const wallMat = createWireframeMaterial(0x6B6B6B);  // Gray
+    const bayMat = createWireframeMaterial(0x5a5a5a);
+    const roofMat = createWireframeMaterial(0x333333);
+    const windowMat = createWireframeMaterial(0x87CEEB);
+
+    const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallMat);
+    body.position.set(0, h / 2, -d / 2);
+    g.add(body);
+
+    const bayProj = 1.2;
+    const bayW = 4;
+    const bayD = 1.2;
+
+    for (let floor = 0; floor < 3; floor++) {
+        const baseY = floor * FLOOR_HEIGHT + 1.5;
+        // Center bay (3-sided jut-out)
+        const bay = new THREE.Mesh(new THREE.BoxGeometry(bayW, 2, bayD), bayMat);
+        bay.position.set(0, baseY, bayProj / 2);
+        g.add(bay);
+
+        const win = new THREE.Mesh(new THREE.BoxGeometry(bayW - 0.4, 1.3, 0.08), windowMat);
+        win.position.set(0, baseY, bayProj + 0.04);
+        g.add(win);
+
+        if (floor === 0) {
+            const door = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 0.1), createWireframeMaterial(0x4a3728));
+            door.position.set(4, 1.1, 0.06);
+            g.add(door);
+        } else {
+            const sideWin = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 0.08), windowMat);
+            sideWin.position.set(4, baseY, 0.06);
+            g.add(sideWin);
+        }
+    }
+
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(w + 0.4, 0.2, d + 0.2), roofMat);
+    roof.position.set(0, h + 0.1, -d/2);
+    g.add(roof);
+
+    return g;
+};
+
+/** Model 3: Ornate porch - round columns, baluster railings, cornice, cream/yellow */
+const createTripleDeckerOrnatePorch = () => {
+    const g = new THREE.Group();
+    const w = TRIPLE_DECKER_WIDTH;
+    const h = TRIPLE_DECKER_HEIGHT;
+    const d = TRIPLE_DECKER_DEPTH;
+    const wallMat = createWireframeMaterial(0xE8DCC8);  // Cream
+    const porchMat = createWireframeMaterial(0xD4C4A8);
+    const columnMat = createWireframeMaterial(0xC9B896);
+    const roofMat = createWireframeMaterial(0x3a3530);
+
+    const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallMat);
+    body.position.set(0, h / 2, -d / 2);
+    g.add(body);
+
+    for (let floor = 0; floor < 3; floor++) {
+        const py = floor * FLOOR_HEIGHT;
+        const deck = new THREE.Mesh(
+            new THREE.BoxGeometry(w + 0.6, 0.12, 1.6),
+            porchMat
+        );
+        deck.position.set(0, py + 0.06, 0.8);
+        g.add(deck);
+
+        // Round columns
+        [-w/2 - 0.15, w/2 + 0.15].forEach((px) => {
+            const col = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, FLOOR_HEIGHT - 0.2, 8), columnMat);
+            col.position.set(px, py + (FLOOR_HEIGHT - 0.2) / 2, 0.8);
+            g.add(col);
+        });
+
+        // Baluster railing
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(w + 0.2, 0.5, 0.08), porchMat);
+        rail.position.set(0, py + 0.6, 1.6);
+        g.add(rail);
+    }
+
+    for (let floor = 0; floor < 3; floor++) {
+        const baseY = floor * FLOOR_HEIGHT + 1.2;
+        [-3, 3].forEach((ox) => {
+            const win = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.3, 0.08), createWireframeMaterial(0x87CEEB));
+            win.position.set(ox, baseY, 0.05);
+            g.add(win);
+        });
+        if (floor === 0) {
+            const door = new THREE.Mesh(new THREE.BoxGeometry(1.1, 2.1, 0.1), createWireframeMaterial(0x6B5344));
+            door.position.set(0, 1.05, 0.05);
+            g.add(door);
+        }
+    }
+
+    // Cornice at roofline
+    const cornice = new THREE.Mesh(new THREE.BoxGeometry(w + 1, 0.4, d + 0.6), columnMat);
+    cornice.position.set(0, h, -d/2);
+    g.add(cornice);
+
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(w + 0.8, 0.18, d + 0.4), roofMat);
+    roof.position.set(0, h + 0.28, -d/2);
+    g.add(roof);
+
+    return g;
+};
+
+/** Model 4: Double bay + ground porch - two projecting bays, brick, small first-floor porch */
+const createTripleDeckerDoubleBay = () => {
+    const g = new THREE.Group();
+    const w = TRIPLE_DECKER_WIDTH;
+    const h = TRIPLE_DECKER_HEIGHT;
+    const d = TRIPLE_DECKER_DEPTH;
+    const wallMat = createWireframeMaterial(0x8B4513);   // Brick
+    const bayMat = createWireframeMaterial(0xA0522D);   // Darker brick
+    const roofMat = createWireframeMaterial(0x4a2020);
+    const windowMat = createWireframeMaterial(0x87CEEB);
+
+    const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallMat);
+    body.position.set(0, h / 2, -d / 2);
+    g.add(body);
+
+    const bayW = 3.2;
+    const bayProj = 1;
+
+    for (let floor = 0; floor < 3; floor++) {
+        const baseY = floor * FLOOR_HEIGHT + 1.4;
+        [-2.5, 2.5].forEach((ox) => {
+            const bay = new THREE.Mesh(new THREE.BoxGeometry(bayW, 2, bayProj), bayMat);
+            bay.position.set(ox, baseY, bayProj / 2);
+            g.add(bay);
+            const win = new THREE.Mesh(new THREE.BoxGeometry(bayW - 0.5, 1.2, 0.1), windowMat);
+            win.position.set(ox, baseY, bayProj + 0.05);
+            g.add(win);
+        });
+        if (floor === 0) {
+            const door = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 0.12), createWireframeMaterial(0x4a3728));
+            door.position.set(0, 1.1, 0.06);
+            g.add(door);
+        }
+    }
+
+    // Ground-floor only porch
+    const porch = new THREE.Mesh(new THREE.BoxGeometry(w + 0.3, 0.15, 1.2), createWireframeMaterial(0x696969));
+    porch.position.set(0, 0.08, 0.6);
+    g.add(porch);
+    const col = new THREE.Mesh(new THREE.BoxGeometry(0.18, 2, 0.18), createWireframeMaterial(0x5a5a5a));
+    col.position.set(-w/2 - 0.05, 1.04, 0.6);
+    g.add(col);
+    const col2 = col.clone();
+    col2.position.set(w/2 + 0.05, 1.04, 0.6);
+    g.add(col2);
+
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(w + 0.5, 0.2, d + 0.3), roofMat);
+    roof.position.set(0, h + 0.1, -d/2);
+    g.add(roof);
+
+    return g;
+};
+
+/** Model 5: Flat front with portico - minimal, small portico over door, white/gray */
+const createTripleDeckerFlatPortico = () => {
+    const g = new THREE.Group();
+    const w = TRIPLE_DECKER_WIDTH;
+    const h = TRIPLE_DECKER_HEIGHT;
+    const d = TRIPLE_DECKER_DEPTH;
+    const wallMat = createWireframeMaterial(0xE8E8E8);  // Light gray/white
+    const trimMat = createWireframeMaterial(0x9a9a9a);
+    const roofMat = createWireframeMaterial(0x4a4a4a);
+    const windowMat = createWireframeMaterial(0xB0C4DE);
+
+    const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallMat);
+    body.position.set(0, h / 2, -d / 2);
+    g.add(body);
+
+    for (let floor = 0; floor < 3; floor++) {
+        const baseY = floor * FLOOR_HEIGHT + 1.25;
+        [-3.5, -1.2, 1.2, 3.5].forEach((ox) => {
+            const win = new THREE.Mesh(new THREE.BoxGeometry(1, 1.2, 0.08), windowMat);
+            win.position.set(ox, baseY, 0.05);
+            g.add(win);
+        });
+    }
+
+    const door = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.2, 0.12), createWireframeMaterial(0x7A6B5C));
+    door.position.set(0, 1.1, 0.06);
+    g.add(door);
+
+    // Portico - small roof over door
+    const porticoRoof = new THREE.Mesh(new THREE.BoxGeometry(3, 0.15, 1.5), trimMat);
+    porticoRoof.position.set(0, 2.5, 0.75);
+    g.add(porticoRoof);
+    const porticoCol1 = new THREE.Mesh(new THREE.BoxGeometry(0.15, 2.2, 0.15), trimMat);
+    porticoCol1.position.set(-1.4, 1.1, 0.75);
+    g.add(porticoCol1);
+    const porticoCol2 = porticoCol1.clone();
+    porticoCol2.position.set(1.4, 1.1, 0.75);
+    g.add(porticoCol2);
+
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(w + 0.2, 0.2, d + 0.2), roofMat);
+    roof.position.set(0, h + 0.1, -d/2);
+    g.add(roof);
+
+    return g;
+};
+
+const TRIPLE_DECKER_MODELS = [
+    createTripleDeckerClassicPorch,
+    createTripleDeckerBayWindow,
+    createTripleDeckerOrnatePorch,
+    createTripleDeckerDoubleBay,
+    createTripleDeckerFlatPortico
+];
+
+/** Simple tall tower for city skyline - gray/blue-gray box. */
+export const createSimpleTower = (width, height, depth, color = 0x4a5568) => {
+    const group = new THREE.Group();
+    const mat = createWireframeMaterial(color);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), mat);
+    body.position.y = height / 2;
+    group.add(body);
+    return group;
+};
+
+/** Returns a random triple decker variant. */
+export const createTripleDeckerBuilding = (variant) => {
+    const idx = variant !== undefined ? variant % TRIPLE_DECKER_MODELS.length : Math.floor(Math.random() * TRIPLE_DECKER_MODELS.length);
+    return TRIPLE_DECKER_MODELS[idx]();
 };
 
 // Create karaoke bar interior elements
@@ -4766,6 +5077,293 @@ export const createShopInterior = (scene, interiorType, shopName, storeWidth = 1
                 interiorGroup.add(centerFlower);
             }
             break;
+
+        case 'bodega': // City bodega
+            {
+                const shelfGeometry = new THREE.BoxGeometry(3, 2, 0.5);
+                const shelfMaterial = warmGlow(0x8B4513);
+                for (let i = 0; i < 4; i++) {
+                    const shelf = new THREE.Mesh(shelfGeometry, shelfMaterial);
+                    shelf.position.set(-6 + i * 4, 1, -storeDepth/2 + 2);
+                    interiorGroup.add(shelf);
+                }
+                const counterGeometry = new THREE.BoxGeometry(6, 1.2, 2);
+                const counter = new THREE.Mesh(counterGeometry, warmGlow(0x333333));
+                counter.position.set(0, 0.6, storeDepth/2 - 4);
+                interiorGroup.add(counter);
+                const coolerGeometry = new THREE.BoxGeometry(2, 1.5, 1);
+                const cooler = new THREE.Mesh(coolerGeometry, warmGlow(0x4682B4));
+                cooler.position.set(-4, 0.75, storeDepth/2 - 2);
+                interiorGroup.add(cooler);
+                break;
+            }
+
+        case 'pho': // Pho House
+            {
+                const phoTableGeometry = new THREE.BoxGeometry(1.5, 0.8, 1);
+                const phoTableMaterial = warmGlow(0x8B4513);
+                for (let i = 0; i < 4; i++) {
+                    const tbl = new THREE.Mesh(phoTableGeometry, phoTableMaterial);
+                    tbl.position.set(-6 + i * 4, 0.4, -4);
+                    interiorGroup.add(tbl);
+                }
+                const phoCounterGeometry = new THREE.BoxGeometry(8, 1.2, 2);
+                const phoCounter = new THREE.Mesh(phoCounterGeometry, warmGlow(0xCC3300));
+                phoCounter.position.set(0, 0.6, storeDepth/2 - 5);
+                interiorGroup.add(phoCounter);
+                const potGeometry = new THREE.CylinderGeometry(0.5, 0.6, 0.8, 8);
+                const pot = new THREE.Mesh(potGeometry, warmGlow(0x333333));
+                pot.position.set(0, 1.2, storeDepth/2 - 5);
+                interiorGroup.add(pot);
+                break;
+            }
+
+        case 'tattoo': // Tattoo Parlor
+            {
+                const chairGeometry = new THREE.BoxGeometry(0.8, 0.6, 1);
+                const chairMaterial = warmGlow(0x2F2F2F);
+                const tattooChair = new THREE.Mesh(chairGeometry, chairMaterial);
+                tattooChair.position.set(0, 0.3, -storeDepth/2 + 4);
+                interiorGroup.add(tattooChair);
+                const lampGeometry = new THREE.CylinderGeometry(0.1, 0.15, 1.2, 8);
+                const lamp = new THREE.Mesh(lampGeometry, warmGlow(0xFFFFAA));
+                lamp.position.set(-2, 1.5, -storeDepth/2 + 4);
+                interiorGroup.add(lamp);
+                const counterGeometry = new THREE.BoxGeometry(5, 1, 1.5);
+                const counter = new THREE.Mesh(counterGeometry, warmGlow(0x1a1a1a));
+                counter.position.set(0, 0.5, storeDepth/2 - 3);
+                interiorGroup.add(counter);
+                const displayGeometry = new THREE.BoxGeometry(2, 2, 0.2);
+                const display = new THREE.Mesh(displayGeometry, warmGlow(0x444444));
+                display.position.set(-4, 1, -storeDepth/2 + 2);
+                interiorGroup.add(display);
+                break;
+            }
+
+        case 'vinyl_coffee': // Vinyl & Coffee
+            {
+                const recordShelfGeometry = new THREE.BoxGeometry(3, 2.5, 0.4);
+                const recordShelfMaterial = warmGlow(0x4a3728);
+                for (let i = 0; i < 3; i++) {
+                    const rack = new THREE.Mesh(recordShelfGeometry, recordShelfMaterial);
+                    rack.position.set(-6 + i * 6, 1.25, -storeDepth/2 + 3);
+                    interiorGroup.add(rack);
+                }
+                const coffeeBarGeometry = new THREE.BoxGeometry(6, 1.2, 2);
+                const coffeeBar = new THREE.Mesh(coffeeBarGeometry, warmGlow(0x663300));
+                coffeeBar.position.set(0, 0.6, storeDepth/2 - 4);
+                interiorGroup.add(coffeeBar);
+                const turntableGeometry = new THREE.BoxGeometry(0.8, 0.3, 0.8);
+                const turntable = new THREE.Mesh(turntableGeometry, warmGlow(0x222222));
+                turntable.position.set(4, 0.95, storeDepth/2 - 4);
+                interiorGroup.add(turntable);
+                break;
+            }
+
+        case 'dive_bar': // Dive Bar (CITY_N center)
+            {
+                const barCounterGeometry = new THREE.BoxGeometry(8, 1.2, 2);
+                const barCounter = new THREE.Mesh(barCounterGeometry, warmGlow(0x4a3728));
+                barCounter.position.set(0, 0.6, -storeDepth/2 + 3);
+                interiorGroup.add(barCounter);
+                const barStoolGeometry = new THREE.CylinderGeometry(0.25, 0.3, 0.6, 8);
+                for (let i = 0; i < 5; i++) {
+                    const stool = new THREE.Mesh(barStoolGeometry, warmGlow(0x8B4513));
+                    stool.position.set(-6 + i * 3, 0.9, -storeDepth/2 + 3);
+                    interiorGroup.add(stool);
+                }
+                const poolTableGeometry = new THREE.BoxGeometry(2.5, 0.1, 4);
+                const poolTable = new THREE.Mesh(poolTableGeometry, warmGlow(0x228B22));
+                poolTable.position.set(-4, 0.05, 2);
+                interiorGroup.add(poolTable);
+                const boothGeometry = new THREE.BoxGeometry(2, 0.8, 1);
+                const booth = new THREE.Mesh(boothGeometry, warmGlow(0x654321));
+                booth.position.set(6, 0.4, -2);
+                interiorGroup.add(booth);
+                break;
+            }
+
+        case 'arcade_bar': // Arcade Bar (CITY_S center)
+            {
+                const barCounterGeometry = new THREE.BoxGeometry(6, 1.2, 2);
+                const barCounter = new THREE.Mesh(barCounterGeometry, warmGlow(0x333333));
+                barCounter.position.set(0, 0.6, -storeDepth/2 + 3);
+                interiorGroup.add(barCounter);
+                const cabinetGeometry = new THREE.BoxGeometry(1.2, 2, 0.8);
+                const cabinetMaterial = warmGlow(0x222222);
+                for (let i = 0; i < 3; i++) {
+                    const cab = new THREE.Mesh(cabinetGeometry, cabinetMaterial);
+                    cab.position.set(-4 + i * 4, 1, 2);
+                    interiorGroup.add(cab);
+                }
+                const pinballGeometry = new THREE.BoxGeometry(1.5, 0.8, 0.9);
+                const pinball = new THREE.Mesh(pinballGeometry, warmGlow(0xFF0000));
+                pinball.position.set(6, 0.4, -2);
+                interiorGroup.add(pinball);
+                break;
+            }
+
+        case 'record_store': // Record Store
+            {
+                const binGeometry = new THREE.BoxGeometry(2, 1.5, 0.5);
+                const binMaterial = warmGlow(0x2F2F2F);
+                for (let i = 0; i < 6; i++) {
+                    const bin = new THREE.Mesh(binGeometry, binMaterial);
+                    bin.position.set(-8 + i * 3, 0.75, -storeDepth/2 + 4);
+                    interiorGroup.add(bin);
+                }
+                const listeningBoothGeometry = new THREE.BoxGeometry(1.5, 2, 1.5);
+                const booth = new THREE.Mesh(listeningBoothGeometry, warmGlow(0x1a1a1a));
+                booth.position.set(6, 1, 2);
+                interiorGroup.add(booth);
+                const registerGeometry = new THREE.BoxGeometry(1, 1.2, 0.6);
+                const register = new THREE.Mesh(registerGeometry, warmGlow(0x444444));
+                register.position.set(0, 0.6, storeDepth/2 - 3);
+                interiorGroup.add(register);
+                break;
+            }
+
+        case 'laundromat': // Laundromat
+            {
+                const washerGeometry = new THREE.CylinderGeometry(0.6, 0.65, 1, 12);
+                const washerMaterial = warmGlow(0xFFFFFF);
+                for (let i = 0; i < 4; i++) {
+                    const washer = new THREE.Mesh(washerGeometry, washerMaterial);
+                    washer.position.set(-6 + i * 4, 0.5, -storeDepth/2 + 3);
+                    interiorGroup.add(washer);
+                }
+                const foldingTableGeometry = new THREE.BoxGeometry(3, 1, 1.5);
+                const foldingTable = new THREE.Mesh(foldingTableGeometry, warmGlow(0x888888));
+                foldingTable.position.set(0, 0.5, 2);
+                interiorGroup.add(foldingTable);
+                const chairGeometry = new THREE.BoxGeometry(0.6, 0.8, 0.6);
+                const waitingChair = new THREE.Mesh(chairGeometry, warmGlow(0x666666));
+                waitingChair.position.set(-8, 0.4, 2);
+                interiorGroup.add(waitingChair);
+                break;
+            }
+
+        case 'corner_cafe': // Corner Cafe
+            {
+                const cafeTableGeometry = new THREE.BoxGeometry(1.2, 0.8, 0.8);
+                const cafeTableMaterial = warmGlow(0x8B4513);
+                for (let i = 0; i < 4; i++) {
+                    const tbl = new THREE.Mesh(cafeTableGeometry, cafeTableMaterial);
+                    tbl.position.set(-5 + i * 3, 0.4, -3);
+                    interiorGroup.add(tbl);
+                }
+                const espressoGeometry = new THREE.BoxGeometry(1.5, 1.5, 1);
+                const espresso = new THREE.Mesh(espressoGeometry, warmGlow(0x333333));
+                espresso.position.set(0, 0.75, storeDepth/2 - 4);
+                interiorGroup.add(espresso);
+                const pastryCaseGeometry = new THREE.BoxGeometry(4, 1.5, 1);
+                const pastryCase = new THREE.Mesh(pastryCaseGeometry, warmGlow(0xCCCCCC));
+                pastryCase.position.set(-4, 0.75, storeDepth/2 - 2);
+                interiorGroup.add(pastryCase);
+                break;
+            }
+
+        case 'bookshop': // Bookshop
+            {
+                const shelfGeometry = new THREE.BoxGeometry(2, 2.5, 0.4);
+                const shelfMaterial = warmGlow(0x4a3728);
+                for (let i = 0; i < 6; i++) {
+                    const shelf = new THREE.Mesh(shelfGeometry, shelfMaterial);
+                    shelf.position.set(-8 + i * 3, 1.25, -storeDepth/2 + 3);
+                    interiorGroup.add(shelf);
+                }
+                const readingChairGeometry = new THREE.BoxGeometry(0.8, 0.9, 0.9);
+                const readingChair = new THREE.Mesh(readingChairGeometry, warmGlow(0x654321));
+                readingChair.position.set(6, 0.45, 2);
+                interiorGroup.add(readingChair);
+                const smallTableGeometry = new THREE.BoxGeometry(0.8, 0.6, 0.8);
+                const smallTable = new THREE.Mesh(smallTableGeometry, warmGlow(0x8B4513));
+                smallTable.position.set(6, 0.3, 3);
+                interiorGroup.add(smallTable);
+                break;
+            }
+
+        case 'sushi': // Sushi Spot
+            {
+                const sushiBarGeometry = new THREE.BoxGeometry(8, 1.2, 2);
+                const sushiBar = new THREE.Mesh(sushiBarGeometry, warmGlow(0x2F4F4F));
+                sushiBar.position.set(0, 0.6, -storeDepth/2 + 3);
+                interiorGroup.add(sushiBar);
+                const conveyorGeometry = new THREE.CylinderGeometry(0.3, 0.3, 6, 16);
+                const conveyor = new THREE.Mesh(conveyorGeometry, warmGlow(0x333333));
+                conveyor.rotation.x = Math.PI / 2;
+                conveyor.position.set(0, 1, -storeDepth/2 + 3);
+                interiorGroup.add(conveyor);
+                const tableGeometry = new THREE.BoxGeometry(1.2, 0.7, 1);
+                const tableMaterial = warmGlow(0x8B4513);
+                for (let i = 0; i < 3; i++) {
+                    const tbl = new THREE.Mesh(tableGeometry, tableMaterial);
+                    tbl.position.set(-4 + i * 4, 0.35, 2);
+                    interiorGroup.add(tbl);
+                }
+                break;
+            }
+
+        case 'vintage': // Vintage Threads
+            {
+                const rackGeometry = new THREE.BoxGeometry(0.1, 2, 1.5);
+                const rackMaterial = warmGlow(0x8B4513);
+                for (let i = 0; i < 5; i++) {
+                    const rack = new THREE.Mesh(rackGeometry, rackMaterial);
+                    rack.position.set(-6 + i * 3, 1, -storeDepth/2 + 4);
+                    interiorGroup.add(rack);
+                }
+                const mirrorGeometry = new THREE.PlaneGeometry(2, 2);
+                const mirror = new THREE.Mesh(mirrorGeometry, warmGlow(0xAAAAAA));
+                mirror.position.set(6, 1.5, -storeDepth/2 + 2);
+                mirror.rotation.y = Math.PI;
+                interiorGroup.add(mirror);
+                const checkoutGeometry = new THREE.BoxGeometry(3, 1.2, 1);
+                const checkout = new THREE.Mesh(checkoutGeometry, warmGlow(0x654321));
+                checkout.position.set(0, 0.6, storeDepth/2 - 3);
+                interiorGroup.add(checkout);
+                break;
+            }
+
+        case 'bubble_tea': // Bubble Tea
+            {
+                const counterGeometry = new THREE.BoxGeometry(6, 1.2, 2);
+                const counter = new THREE.Mesh(counterGeometry, warmGlow(0xFFB6C1));
+                counter.position.set(0, 0.6, storeDepth/2 - 4);
+                interiorGroup.add(counter);
+                const machineGeometry = new THREE.BoxGeometry(1.5, 1.5, 1);
+                const machine = new THREE.Mesh(machineGeometry, warmGlow(0x333333));
+                machine.position.set(-2, 1.35, storeDepth/2 - 4);
+                interiorGroup.add(machine);
+                const boothGeometry = new THREE.BoxGeometry(1.5, 0.8, 1);
+                const boothMaterial = warmGlow(0x996633);
+                for (let i = 0; i < 3; i++) {
+                    const b = new THREE.Mesh(boothGeometry, boothMaterial);
+                    b.position.set(-5 + i * 4, 0.4, -3);
+                    interiorGroup.add(b);
+                }
+                break;
+            }
+
+        case 'smoke_shop': // Smoke Shop
+            {
+                const displayCaseGeometry = new THREE.BoxGeometry(5, 1.5, 1);
+                const displayCase = new THREE.Mesh(displayCaseGeometry, warmGlow(0x2F4F2F));
+                displayCase.position.set(0, 0.75, storeDepth/2 - 4);
+                interiorGroup.add(displayCase);
+                const shelfGeometry = new THREE.BoxGeometry(2, 1.5, 0.4);
+                const shelfMaterial = warmGlow(0x4a3728);
+                for (let i = 0; i < 4; i++) {
+                    const shelf = new THREE.Mesh(shelfGeometry, shelfMaterial);
+                    shelf.position.set(-6 + i * 4, 0.75, -storeDepth/2 + 3);
+                    interiorGroup.add(shelf);
+                }
+                const stoolGeometry = new THREE.CylinderGeometry(0.2, 0.25, 0.5, 8);
+                const stool = new THREE.Mesh(stoolGeometry, warmGlow(0x333333));
+                stool.position.set(-8, 0.6, 2);
+                interiorGroup.add(stool);
+                break;
+            }
             
         default:
             // Generic shop - add basic shelves

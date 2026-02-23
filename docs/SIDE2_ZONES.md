@@ -6,27 +6,28 @@ The six placeholder zones in the 3x3 unified map (ZONE_SW, ZONE_SE, ZONE_W, ZONE
 
 ```
         z=333
-   [ZONE_NW]  [FOREST_SUBURBAN]  [ZONE_NE]
-   forest     forest suburban     MANSION
-   clearings
+   [ZONE_NW]     [FOREST_SUBURBAN]     [ZONE_NE]
+   MANSION       forest suburban       RIVER
         z=0
-   [ZONE_W]   [PLAZA]            [ZONE_E]
+   [ZONE_W]      [PLAZA]               [ZONE_E]
+   HILL                                  RIVER
         z=-333
-   [ZONE_SW]  [POND]             [ZONE_SE]
-                             HILL / mountain
-   x=-333     0                  333
+   [ZONE_SW]     [POND]                [ZONE_SE]
+   Forest                                RIVER
+   clearings
+   x=-333        0                     333
 ```
 
 ## Zone Themes (implemented)
 
 | Zone | Location | Theme | Notes |
 |------|----------|-------|-------|
-| ZONE_NW | Above PLAZA, left | Forest clearings | Path, abandoned props, interactive items |
-| ZONE_NE | Above PLAZA, right | Mansion compound | Main mansion, gate, walls, driveway, garage |
-| ZONE_SE | Below PLAZA, right | Hill / mountain | Big hill with rocks, rural landmark |
-| ZONE_W | Left of PLAZA | — | Grass only |
-| ZONE_E | Right of PLAZA | — | Grass only |
-| ZONE_SW | Below PLAZA, left | — | Grass only |
+| ZONE_NW | Above PLAZA, left | Mansion compound | Main mansion, gate, walls, driveway, garage |
+| ZONE_W | Left of PLAZA | Hill | Big hill with rocks |
+| ZONE_SW | Below PLAZA, left | Forest clearings | Path, abandoned props, interactive items |
+| ZONE_NE | Above PLAZA, right | River | Water runs through |
+| ZONE_E | Right of PLAZA | River | Water runs through |
+| ZONE_SE | Below PLAZA, right | River | Water runs through |
 
 ## Story Alignment (STORY_OUTLINE.md)
 

@@ -111,7 +111,8 @@ const createNightSky = (scene) => {
             }
         `,
         transparent: true,
-        depthWrite: false
+        depthWrite: false,
+        fog: false // Exclude from distance fog so stars stay visible
     });
     
     const stars = new THREE.Points(starsGeometry, starsMaterial);
@@ -122,7 +123,8 @@ const createNightSky = (scene) => {
     const sunGeometry = new THREE.SphereGeometry(25, 16, 16);
     const sunMaterial = new THREE.MeshBasicMaterial({
         color: 0xFFFACD,
-        wireframe: false
+        wireframe: false,
+        fog: false // Exclude from distance fog so sun stays bright
     });
     const sun = new THREE.Mesh(sunGeometry, sunMaterial);
     sun.visible = false; // Start hidden, updated by updateNightSky
@@ -172,7 +174,8 @@ const createFullMoon = () => {
     const moonGeometry = new THREE.SphereGeometry(5, 16, 16);
     const moonMaterial = new THREE.MeshBasicMaterial({
         color: 0xFFFCE0, // Creamy yellow color
-        wireframe: false
+        wireframe: false,
+        fog: false // Exclude from distance fog so moon stays bright
     });
     const moon = new THREE.Mesh(moonGeometry, moonMaterial);
     moonGroup.add(moon);
@@ -183,7 +186,8 @@ const createFullMoon = () => {
         const craterMaterial = new THREE.MeshBasicMaterial({ 
             color: color, 
             transparent: true,
-            opacity: opacity
+            opacity: opacity,
+            fog: false
         });
         const crater = new THREE.Mesh(craterGeometry, craterMaterial);
         
@@ -237,7 +241,8 @@ const createPhasedMoon = (phase) => {
     const moonShadowGeometry = new THREE.SphereGeometry(5, 16, 16);
     const moonShadowMaterial = new THREE.MeshBasicMaterial({
         color: 0x555566, // Gray with blue tint
-        wireframe: false
+        wireframe: false,
+        fog: false
     });
     const moonShadow = new THREE.Mesh(moonShadowGeometry, moonShadowMaterial);
     moonGroup.add(moonShadow);
@@ -247,7 +252,8 @@ const createPhasedMoon = (phase) => {
     const illuminatedMaterial = new THREE.MeshBasicMaterial({
         color: 0xFFFCE0, // Creamy yellow color
         wireframe: false,
-        side: THREE.FrontSide
+        side: THREE.FrontSide,
+        fog: false
     });
     
     const illuminatedPart = new THREE.Mesh(illuminatedGeometry, illuminatedMaterial);
@@ -273,7 +279,7 @@ const createPhasedMoon = (phase) => {
         const eyeColor = (phase === 4) ? 0x333333 : 0x444444; // Darker for full moon
         
         const eyeGeometry = new THREE.CircleGeometry(eyeSize, 8);
-        const eyeMaterial = new THREE.MeshBasicMaterial({ color: eyeColor });
+        const eyeMaterial = new THREE.MeshBasicMaterial({ color: eyeColor, fog: false });
         
         // Position eyes based on phase
         let eyeXOffset = 1.5;
@@ -310,8 +316,9 @@ const createMoonGlow = (opacity = 0.3) => {
         transparent: true,
         opacity: opacity * 1.3,
         wireframe: false,
-        depthWrite: false, // Prevent depth sorting issues
-        depthTest: false // Always render, even when close
+        depthWrite: false,
+        depthTest: true, // Occluded by ground when below horizon
+        fog: false
     });
     const innerGlow = new THREE.Mesh(innerGlowGeometry, innerGlowMaterial);
     innerGlow.renderOrder = 999; // Render last
@@ -324,8 +331,9 @@ const createMoonGlow = (opacity = 0.3) => {
         transparent: true,
         opacity: opacity * 0.7,
         wireframe: false,
-        depthWrite: false, // Prevent depth sorting issues
-        depthTest: false // Always render, even when close
+        depthWrite: false,
+        depthTest: true, // Occluded by ground when below horizon
+        fog: false
     });
     const middleGlow = new THREE.Mesh(middleGlowGeometry, middleGlowMaterial);
     middleGlow.renderOrder = 999; // Render last
@@ -338,8 +346,9 @@ const createMoonGlow = (opacity = 0.3) => {
         transparent: true,
         opacity: opacity * 0.4,
         wireframe: false,
-        depthWrite: false, // Prevent depth sorting issues
-        depthTest: false // Always render, even when close
+        depthWrite: false,
+        depthTest: true, // Occluded by ground when below horizon
+        fog: false
     });
     const outerGlow = new THREE.Mesh(outerGlowGeometry, outerGlowMaterial);
     outerGlow.renderOrder = 999; // Render last
@@ -353,44 +362,59 @@ const createMoonGlow = (opacity = 0.3) => {
 
 // Moon arc: dayProgress 0 = east/horizon, 0.5 = zenith, 1 = west/horizon
 // Sun: opposite phase (dayProgress 0.5 = sun at zenith)
+// Extended arc: bodies dip below horizon at rise/set instead of popping in/out
 const updateNightSky = (scene, time, dayProgress = 0) => {
     if (!scene.userData.nightSky) return;
     
-    // Update star twinkling; dim stars during daytime
-    const stars = scene.userData.nightSky.stars;
-    if (stars?.material?.uniforms) {
-        stars.material.uniforms.time.value = time * 500;
-        const sunAngle = (dayProgress + 0.5) * Math.PI;
-        stars.visible = Math.sin(sunAngle) <= 0.15; // Hide stars when sun is up
-    }
-    
-    const { moon, moonGlow, sun } = scene.userData.nightSky;
+    const { moon, moonGlow, sun, stars } = scene.userData.nightSky;
     if (!moon) return;
     
-    // Moon arc: angle 0 to PI (east -> zenith -> west)
-    const moonAngle = dayProgress * Math.PI;
+    // Extended arc: -DIP to (PI + DIP), so bodies dip below horizon at rise/set
+    // Arc goes from NE corner to SW corner of sky - rise/set at map corners (1000x1000)
+    const DIP = Math.PI / 6;
+    const angleSpan = Math.PI + 2 * DIP;
     const arcRadius = 200;
     const horizonY = 50;
-    const moonX = arcRadius * Math.cos(moonAngle);
+    const mapHalf = 500; // Map is 1000x1000; corners at (±500, ±500)
+    const moonRadius = 20; // base 5 * scale 4
+    const moonGlowRadius = 28; // outer glow sphere 7 * scale 4
+    const sunRadius = 25;
+    
+    // Moon: dayProgress 0→1 maps to -DIP → (PI + DIP)
+    const moonAngle = -DIP + dayProgress * angleSpan;
+    const moonElevation = Math.sin(moonAngle);
+    
+    // Sun: same range, phase shifted by 0.5
+    const sunAngle = -DIP + ((dayProgress + 0.5) % 1) * angleSpan;
+    const sunElevation = Math.sin(sunAngle);
+    
+    // Update star twinkling; dim stars during daytime
+    if (stars?.material?.uniforms) {
+        stars.material.uniforms.time.value = time * 500;
+        stars.visible = sunElevation <= 0.15; // Hide stars when sun is up
+    }
+    
+    // X/Z: NE corner (500, 500) to SW corner (-500, -500) - map corners
+    const moonZProgress = (moonAngle + DIP) / angleSpan; // 0 at rise, 1 at set
+    const moonX = mapHalf - moonZProgress * (2 * mapHalf); // 500 → -500
     const moonY = horizonY + arcRadius * Math.sin(moonAngle);
-    const moonZ = -150;
+    const moonZ = mapHalf - moonZProgress * (2 * mapHalf); // 500 → -500
     
     moon.position.set(moonX, moonY, moonZ);
     moonGlow.position.copy(moon.position);
     
-    // Hide moon glow when near/below horizon
-    const moonElevation = Math.sin(moonAngle);
-    moonGlow.visible = moonElevation > 0.05;
+    // Hide when top edge passes below horizon (Y=0)
+    moon.visible = moonY > -moonRadius;
+    moonGlow.visible = moonY > -moonGlowRadius;
     
-    // Sun: opposite phase - visible when moon is down
-    const sunAngle = (dayProgress + 0.5) * Math.PI;
-    const sunX = arcRadius * Math.cos(sunAngle);
+    const sunZProgress = (sunAngle + DIP) / angleSpan;
+    const sunX = mapHalf - sunZProgress * (2 * mapHalf);
     const sunY = horizonY + arcRadius * Math.sin(sunAngle);
-    const sunZ = -120;
+    const sunZ = mapHalf - sunZProgress * (2 * mapHalf);
     
     if (sun) {
         sun.position.set(sunX, sunY, sunZ);
-        sun.visible = Math.sin(sunAngle) > 0.1;
+        sun.visible = sunY > -sunRadius;
     }
     
     // Slight rotation of moon

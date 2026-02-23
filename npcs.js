@@ -5,7 +5,7 @@ import { isMobile } from './controls.js';
 import { INTERIOR_TARGET_SIZE, createGlowingWireframeMaterial } from './buildings.js';
 import { startConversation, getCurrentDialogue, advanceConversation, hasActiveConversation, endConversation, getConversationAtEnd, setConversationAtEnd, unlockCurrentSong, getUnlockedSongs, getCurrentConversationUnlock, isSongUnlocked, markItemEncountered } from './dialogue.js';
 import { triggerPhoneGlow } from './phone-ui.js';
-import { SCENE_CONFIGS, UNIFIED_MAP, UNIFIED_MAP_ZONE_OFFSETS } from './scenes.js';
+import { SCENE_CONFIGS, UNIFIED_MAP, UNIFIED_MAP_ZONE_OFFSETS, getCurrentMap } from './scenes.js';
 
 const DEFAULT_NPC_COLOR = 0xFF6B9D;
 const NPC_WORLD_POSITION = new THREE.Vector3();
@@ -324,6 +324,9 @@ const getNextScene = (currentScene) => {
         case 'PLAZA': return { key: 'FOREST_SUBURBAN', name: 'The Suburbs' };
         case 'FOREST_SUBURBAN': return { key: 'POND', name: 'The Pond' };
         case 'POND': return { key: 'PLAZA', name: 'Downtown' };
+        case 'CITY_PLAZA': return { key: 'CITY_N', name: 'Commonwealth Ave' };
+        case 'CITY_N': return { key: 'CITY_S', name: 'Brighton Ave' };
+        case 'CITY_S': return { key: 'CITY_PLAZA', name: 'Harvard Ave' };
         default: return { key: 'PLAZA', name: 'Downtown' };
     }
 };
@@ -414,8 +417,24 @@ export const checkBusStopProximity = (camera, PLAZA_CONFIG, CURRENT_SCENE, stree
             return; // Building portal takes priority
         }
     }
+
+    // Check subway stop if present (before bus stop)
+    if (streetElements?.subwayStopPosition) {
+        const subPos = streetElements.subwayStopPosition;
+        const distToSubway = playerPosition.distanceTo(new THREE.Vector3(subPos.x, 0, subPos.z));
+        if (distToSubway < 6) {
+            const currentMap = getCurrentMap();
+            const dest = currentMap === 'suburban' ? 'Allston' : 'the suburbs';
+            sceneSwitchUI.innerHTML = `
+                <div style="font-weight: bold; margin-bottom: 5px;">🚇 Subway</div>
+                <div style="font-size: 12px; margin-bottom: 5px;">Press Space to travel to ${dest}</div>
+            `;
+            sceneSwitchUI.style.display = 'block';
+            return;
+        }
+    }
     
-    // Check bus stop if not near a building door
+    // Check bus stop if not near a building door or subway
     if (distanceToBusStop < 5) {
         const nextScene = UNIFIED_MAP
             ? (() => {
